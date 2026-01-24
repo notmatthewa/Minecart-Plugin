@@ -1,0 +1,98 @@
+{
+  "TranslationProperties": {
+    "Name": "items.UsefulMinecarts_Chest_Rail_Kart.name",
+    "Description": "items.UsefulMinecarts_Chest_Rail_Kart.description"
+  },
+  "Icon": "Icons/ItemsGenerated/UsefulMinecarts_Chest_Rail_Kart.png",
+  "Categories": [
+    "Furniture.Benches"
+  ],
+  "Recipe": {
+    "TimeSeconds": 3,
+    "Input": [
+      {
+        "ItemId": "Rail_Kart",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Furniture_Crude_Chest_Small",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ]
+      }
+    ]
+  },
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "SpawnMinecart",
+          "Model": "UsefulMinecarts_Chest_Minecart",
+          "CartInteractions": {
+            "Use": {
+              "Interactions": [
+                {
+                  "$Comment": "F + crouch = open chest",
+                  "Type": "Condition",
+                  "Crouching": true,
+                  "Next": {
+                    "Type": "UsefulMinecartsOpenChestCart"
+                  }
+                },
+                {
+                  "$Comment": "F alone = ride",
+                  "Type": "Condition",
+                  "Crouching": false,
+                  "Next": {
+                    "Type": "Mount",
+                    "AttachmentOffset": {
+                      "X": 0,
+                      "Y": 1,
+                      "Z": 0.3
+                    },
+                    "Controller": "Minecart"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "ModifyInventory",
+          "AdjustHeldItemQuantity": -1
+        }
+      ]
+    }
+  },
+  "Set": "Furniture_Jungle",
+  "PlayerAnimationsId": "Item",
+  "Model": "Items/Vehicles/Rail_Kart.blockymodel",
+  "Texture": "Items/Vehicles/Rail_Kart_Texture.png",
+  "IconProperties": {
+    "Scale": 0.55,
+    "Translation": [
+      0,
+      -15
+    ],
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Rail",
+      "Container"
+    ]
+  },
+  "MaxStack": 1
+}

@@ -1,0 +1,110 @@
+$C = "../Common.ui";
+$S = "../Sounds.ui";
+
+/* Chest Cart UI with proper item slots */
+
+@TipLabel = LabelStyle(FontSize: 10, TextColor: #7F8C8D, RenderItalics: true);
+
+$C.@PageOverlay {
+  $C.@Container {
+    Anchor: (Width: 420, Height: 280);
+
+    #Title {
+      Group { $C.@Title { @Text = "CHEST RAIL CART"; } }
+    }
+
+    #Content {
+      LayoutMode: Top;
+      Padding: (Top: 16, Left: 16, Right: 16, Bottom: 16);
+
+      /* Row 1 */
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 44);
+        Group { FlexWeight: 1; }
+        ItemSlot #Slot0 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot1 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot2 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot3 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot4 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot5 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot6 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot7 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot8 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { FlexWeight: 1; }
+      }
+
+      Group { Anchor: (Height: 2); }
+
+      /* Row 2 */
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 44);
+        Group { FlexWeight: 1; }
+        ItemSlot #Slot9 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot10 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot11 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot12 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot13 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot14 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot15 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot16 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot17 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { FlexWeight: 1; }
+      }
+
+      Group { Anchor: (Height: 2); }
+
+      /* Row 3 */
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 44);
+        Group { FlexWeight: 1; }
+        ItemSlot #Slot18 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot19 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot20 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot21 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot22 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot23 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot24 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot25 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { Anchor: (Width: 2); }
+        ItemSlot #Slot26 { Anchor: (Width: 40, Height: 40); ShowQuantity: true; }
+        Group { FlexWeight: 1; }
+      }
+
+      Group { FlexWeight: 1; }
+
+      Label {
+        Text: "Press F to ride, Crouch to open chest";
+        Style: @TipLabel;
+        Anchor: (Height: 16);
+      }
+    }
+  }
+}
+
+$C.@BackButton {}

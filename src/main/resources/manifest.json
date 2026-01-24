@@ -1,0 +1,25 @@
+{
+    "Group": "UsefulMinecarts",
+    "Name": "UsefulMinecarts",
+    "Version": "1.0.0",
+    "Description": "Adds useful minecart variants including the Chest Rail Cart - a minecart with built-in storage!",
+    "Authors": [
+        {
+            "Name": "Matt"
+        }
+    ],
+    "Website": "",
+    "ServerVersion": "*",
+    "Main": "com.usefulminecarts.UsefulMinecartsPlugin",
+    "Dependencies": {
+        "Hytale:InteractionModule": "*"
+    },
+    "OptionalDependencies": {
+        
+    },
+    "LoadBefore": {
+        
+    },
+    "DisabledByDefault": false,
+    "IncludesAssetPack": true
+}
