@@ -3,7 +3,7 @@
     {
       "id": "1",
       "name": "Cart_Base",
-      "position": {"x": 0, "y": 9, "z": 0},
+      "position": {"x": 0, "y": 7, "z": 0},
       "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
       "shape": {
         "type": "box",
@@ -36,13 +36,13 @@
           },
           "top": {
             "offset": {"x": 44, "y": 54},
-            "mirror": {"x": true, "y": true},
-            "angle": 270
+            "mirror": {"x": false, "y": false},
+            "angle": 90
           },
           "bottom": {
             "offset": {"x": 44, "y": 54},
-            "mirror": {"x": true, "y": true},
-            "angle": 270
+            "mirror": {"x": false, "y": false},
+            "angle": 90
           }
         },
         "unwrapMode": "custom",
@@ -119,8 +119,8 @@
                 "textureLayout": {
                   "front": {
                     "offset": {"x": 105, "y": 18},
-                    "mirror": {"x": true, "y": true},
-                    "angle": 270
+                    "mirror": {"x": false, "y": false},
+                    "angle": 90
                   }
                 },
                 "unwrapMode": "custom",
@@ -200,8 +200,8 @@
                 "textureLayout": {
                   "front": {
                     "offset": {"x": 105, "y": 18},
-                    "mirror": {"x": true, "y": true},
-                    "angle": 270
+                    "mirror": {"x": false, "y": false},
+                    "angle": 90
                   }
                 },
                 "unwrapMode": "custom",
@@ -448,7 +448,7 @@
     {
       "id": "12",
       "name": "Chest1",
-      "position": {"x": 0, "y": 17.5, "z": 21.5},
+      "position": {"x": 0, "y": 15.5, "z": 21.5},
       "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
       "shape": {
         "type": "none",
@@ -723,7 +723,7 @@
     {
       "id": "18",
       "name": "Chest2",
-      "position": {"x": 0, "y": 17.5, "z": -21.5},
+      "position": {"x": 0, "y": 15.5, "z": -21.5},
       "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
       "shape": {
         "type": "none",
