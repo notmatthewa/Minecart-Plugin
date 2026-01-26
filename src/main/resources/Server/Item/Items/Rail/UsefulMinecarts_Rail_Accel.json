@@ -1,0 +1,242 @@
+{
+  "TranslationProperties": {
+    "Name": "items.UsefulMinecarts_Rail_Accel.name",
+    "Description": "items.UsefulMinecarts_Rail_Accel.description"
+  },
+  "Icon": "Icons/ItemsGenerated/UsefulMinecarts_Rail_Accel.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "Set": "Wood_Softwood_Planks",
+  "Recipe": {
+    "TimeSeconds": 1.0,
+    "Input": [
+      {
+        "ItemId": "Rail",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Bar_Gold",
+        "Quantity": 1
+      }
+    ],
+    "OutputQuantity": 1,
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ]
+      }
+    ]
+  },
+  "BlockType": {
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Tinkering/Rails/Rail_Accel.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Tinkering/Rails/Rail_Accel_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "VariantRotation": "NESW",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks"
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "Material": "Solid",
+    "HitboxType": "Rail",
+    "State": {
+      "Definitions": {
+        "Slope": {
+          "Support": {
+            "UpNorth": [
+              {
+                "FaceType": "Rail"
+              }
+            ],
+            "South": [
+              {
+                "FaceType": "Rail"
+              }
+            ],
+            "DownSouth": [
+              {
+                "FaceType": "Rail"
+              }
+            ],
+            "Down": [
+              {
+                "FaceType": "Full"
+              }
+            ]
+          },
+          "Supporting": {
+            "UpNorth": [
+              {
+                "FaceType": "Rail"
+              }
+            ],
+            "South": [
+              {
+                "FaceType": "Rail"
+              }
+            ],
+            "DownSouth": [
+              {
+                "FaceType": "Rail"
+              }
+            ]
+          },
+          "Rail": {
+            "Points": [
+              {
+                "Point": {
+                  "X": 0.5,
+                  "Y": 1.1,
+                  "Z": 0
+                },
+                "Normal": {
+                  "X": 0,
+                  "Y": 1,
+                  "Z": 1
+                }
+              },
+              {
+                "Point": {
+                  "X": 0.5,
+                  "Y": 0.1,
+                  "Z": 1
+                },
+                "Normal": {
+                  "X": 0,
+                  "Y": 1,
+                  "Z": 1
+                }
+              }
+            ]
+          },
+          "HitboxType": "Stairs",
+          "CustomModel": "Blocks/Tinkering/Rails/Rail_Accel_Slope.blockymodel"
+        }
+      }
+    },
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ],
+      "North": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "DownNorth": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "South": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "DownSouth": [
+        {
+          "FaceType": "Rail"
+        }
+      ]
+    },
+    "Supporting": {
+      "North": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "DownNorth": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "South": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "DownSouth": [
+        {
+          "FaceType": "Rail"
+        }
+      ]
+    },
+    "ParticleColor": "#FFD700",
+    "BlockSoundSetId": "Metal",
+    "Rail": {
+      "Points": [
+        {
+          "Point": {
+            "X": 0.5,
+            "Y": 0.1,
+            "Z": 0
+          },
+          "Normal": {
+            "X": 0,
+            "Y": 1,
+            "Z": 0
+          }
+        },
+        {
+          "Point": {
+            "X": 0.5,
+            "Y": 0.1,
+            "Z": 1
+          },
+          "Normal": {
+            "X": 0,
+            "Y": 1,
+            "Z": 0
+          }
+        }
+      ]
+    },
+    "ConnectedBlockRuleSet": {
+      "Type": "CustomTemplate",
+      "TemplateShapeAssetId": "UsefulMinecarts_AccelRailConnectedBlockTemplate",
+      "TemplateShapeBlockPatterns": {
+        "Straight": "UsefulMinecarts_Rail_Accel",
+        "Slope": "*UsefulMinecarts_Rail_Accel_State_Definitions_Slope"
+      }
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.765,
+    "Translation": [
+      0,
+      -1.7
+    ],
+    "Rotation": [
+      90,
+      0,
+      0
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Rail",
+      "Accelerator"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

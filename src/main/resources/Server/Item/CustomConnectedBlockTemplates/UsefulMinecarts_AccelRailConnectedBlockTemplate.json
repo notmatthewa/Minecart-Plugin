@@ -1,0 +1,84 @@
+{
+  "MaterialName": "Rail",
+  "ConnectsToOtherMaterials": true,
+  "DefaultShape": "Straight",
+  "Shapes": {
+    "Straight": {
+      "FaceTags": {
+        "North": [
+          "RailConnection"
+        ],
+        "South": [
+          "RailConnection"
+        ]
+      },
+      "PatternsToMatchAnyOf": [
+        {
+          "Type": "Custom",
+          "RequireFaceTagsMatchingRoll": true,
+          "TransformRulesToOrientation": true,
+          "YawToApplyAddReplacedBlockType": "Ninety",
+          "RulesToMatch": [
+            {
+              "Position": {
+                "X": 1,
+                "Y": 0,
+                "Z": 0
+              },
+              "IncludeOrExclude": "Include",
+              "FaceTags": {
+                "West": [
+                  "RailConnection"
+                ]
+              }
+            },
+            {
+              "Position": {
+                "X": -1,
+                "Y": 0,
+                "Z": 0
+              },
+              "IncludeOrExclude": "Include",
+              "FaceTags": {
+                "East": [
+                  "RailConnection"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "Slope": {
+      "FaceTags": {
+        "South": [
+          "RailConnection"
+        ]
+      },
+      "PatternsToMatchAnyOf": [
+        {
+          "Type": "Custom",
+          "AllowedPatternTransformations": {
+            "MirrorZ": true
+          },
+          "TransformRulesToOrientation": true,
+          "RulesToMatch": [
+            {
+              "Position": {
+                "X": 0,
+                "Y": 1,
+                "Z": -1
+              },
+              "IncludeOrExclude": "Include",
+              "FaceTags": {
+                "South": [
+                  "RailConnection"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -28,6 +28,7 @@ public class MinecartConfig {
     private static double uphillDrag = 0.7;          // Extra drag when going uphill
     private static double initialPush = 0.3;         // Initial velocity when cart starts on slope
     private static double rotationSmoothing = 0.15;  // How quickly cart rotates to match direction (0-1)
+    private static double acceleratorBoost = 1.2;     // Speed multiplier when passing over accelerator rails (e.g., 1.2 = 20% faster)
 
     // Getters
     public static double getMaxSpeed() { return maxSpeed; }
@@ -39,6 +40,7 @@ public class MinecartConfig {
     public static double getUphillDrag() { return uphillDrag; }
     public static double getInitialPush() { return initialPush; }
     public static double getRotationSmoothing() { return rotationSmoothing; }
+    public static double getAcceleratorBoost() { return acceleratorBoost; }
 
     // Setters with validation
     public static boolean setMaxSpeed(double value) {
@@ -104,6 +106,13 @@ public class MinecartConfig {
         return true;
     }
 
+    public static boolean setAcceleratorBoost(double value) {
+        if (value < 0.1 || value > 20.0) return false;
+        acceleratorBoost = value;
+        save();
+        return true;
+    }
+
     /**
      * Reset all values to defaults.
      */
@@ -117,6 +126,7 @@ public class MinecartConfig {
         uphillDrag = 0.7;
         initialPush = 0.3;
         rotationSmoothing = 0.15;
+        acceleratorBoost = 1.2;
         save();
     }
 
@@ -134,9 +144,10 @@ public class MinecartConfig {
             "  slopeBoost: %.2f\n" +
             "  uphillDrag: %.2f\n" +
             "  initialPush: %.2f\n" +
-            "  rotationSmoothing: %.2f",
+            "  rotationSmoothing: %.2f\n" +
+            "  acceleratorBoost: %.2fx multiplier",
             maxSpeed, acceleration, friction, cornerFriction,
-            minSpeed, slopeBoost, uphillDrag, initialPush, rotationSmoothing
+            minSpeed, slopeBoost, uphillDrag, initialPush, rotationSmoothing, acceleratorBoost
         );
     }
 
@@ -163,6 +174,7 @@ public class MinecartConfig {
             uphillDrag = Double.parseDouble(props.getProperty("uphillDrag", "0.7"));
             initialPush = Double.parseDouble(props.getProperty("initialPush", "0.3"));
             rotationSmoothing = Double.parseDouble(props.getProperty("rotationSmoothing", "0.15"));
+            acceleratorBoost = Double.parseDouble(props.getProperty("acceleratorBoost", "1.2"));
 
             LOGGER.atInfo().log("[MinecartConfig] Loaded config from file");
         } catch (Exception e) {
@@ -191,6 +203,7 @@ public class MinecartConfig {
             props.setProperty("uphillDrag", String.valueOf(uphillDrag));
             props.setProperty("initialPush", String.valueOf(initialPush));
             props.setProperty("rotationSmoothing", String.valueOf(rotationSmoothing));
+            props.setProperty("acceleratorBoost", String.valueOf(acceleratorBoost));
 
             try (OutputStream out = Files.newOutputStream(configPath)) {
                 props.store(out, "UsefulMinecarts Physics Configuration");

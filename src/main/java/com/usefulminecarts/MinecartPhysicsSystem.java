@@ -272,6 +272,15 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         // Apply friction (reduces magnitude regardless of sign)
         velocity *= MinecartConfig.getFriction();
 
+        // Apply accelerator rail boost (multiplier)
+        if (snap.isAccelerator) {
+            velocity *= MinecartConfig.getAcceleratorBoost();
+            // Give stationary carts a push on accelerator rails
+            if (Math.abs(velocity) < MinecartConfig.getMinSpeed()) {
+                velocity = MinecartConfig.getInitialPush() * 2.0;
+            }
+        }
+
         // Clamp to max speed
         if (velocity > MinecartConfig.getMaxSpeed()) {
             velocity = MinecartConfig.getMaxSpeed();
@@ -392,6 +401,12 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 break;
             }
 
+            // Apply accelerator boost when entering an accelerator rail block (multiplier)
+            if (newSnap.isAccelerator && (currentSnap == null || newSnap.blockX != currentSnap.blockX || newSnap.blockZ != currentSnap.blockZ)) {
+                velocity *= MinecartConfig.getAcceleratorBoost();
+                minecartVelocities.put(entityId, velocity);
+            }
+
             // For straight rails: maintain current world movement direction (already aligned at tick start)
             // For corners: adjust direction to follow the corner
             double newSnapHorizLen = Math.sqrt(newSnap.dirX * newSnap.dirX + newSnap.dirZ * newSnap.dirZ);
@@ -508,7 +523,84 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                         break;
                     }
                 } else {
-                    // STRAIGHT RAIL: Keep velocity as magnitude, maintain direction
+                    // STRAIGHT RAIL: Check if cart can continue in its current direction
+                    // The railDir from config may not match visual orientation, so we check
+                    // for actual rails in the cart's movement direction first
+
+                    // Determine the edge the cart is moving towards
+                    int currentMoveEdge;
+                    if (Math.abs(worldMoveX) > Math.abs(worldMoveZ)) {
+                        currentMoveEdge = worldMoveX > 0 ? EDGE_EAST : EDGE_WEST;
+                    } else {
+                        currentMoveEdge = worldMoveZ > 0 ? EDGE_SOUTH : EDGE_NORTH;
+                    }
+
+                    // Check if there's a rail in the cart's current direction
+                    boolean hasRailAhead = hasRailInDirection(world, newSnap, currentMoveEdge);
+
+                    if (!hasRailAhead) {
+                        // No rail ahead in current direction - check if we need to turn
+                        // This handles the case of entering a perpendicular rail (e.g., accelerator)
+                        double worldDotRail = worldMoveX * newNormX + worldMoveZ * newNormZ;
+
+                        if (Math.abs(worldDotRail) < 0.3) {
+                            // Moving perpendicular to rail segment AND no rail ahead
+                            // Must align to rail to continue
+
+                            double positiveDirX = newNormX;
+                            double positiveDirZ = newNormZ;
+                            double negativeDirX = -newNormX;
+                            double negativeDirZ = -newNormZ;
+
+                            // Check for rails along the rail's direction
+                            int posEdge, negEdge;
+                            if (Math.abs(positiveDirX) > Math.abs(positiveDirZ)) {
+                                posEdge = positiveDirX > 0 ? EDGE_EAST : EDGE_WEST;
+                                negEdge = positiveDirX > 0 ? EDGE_WEST : EDGE_EAST;
+                            } else {
+                                posEdge = positiveDirZ > 0 ? EDGE_SOUTH : EDGE_NORTH;
+                                negEdge = positiveDirZ > 0 ? EDGE_NORTH : EDGE_SOUTH;
+                            }
+
+                            boolean hasPosRail = hasRailInDirection(world, newSnap, posEdge);
+                            boolean hasNegRail = hasRailInDirection(world, newSnap, negEdge);
+
+                            // Choose direction: prefer the one with a rail, else positive direction
+                            if (hasPosRail && !hasNegRail) {
+                                worldMoveX = positiveDirX;
+                                worldMoveZ = positiveDirZ;
+                            } else if (hasNegRail && !hasPosRail) {
+                                worldMoveX = negativeDirX;
+                                worldMoveZ = negativeDirZ;
+                            } else if (hasPosRail || hasNegRail) {
+                                // Both have rails - use positive direction
+                                worldMoveX = positiveDirX;
+                                worldMoveZ = positiveDirZ;
+                            } else {
+                                // No rails in either direction - dead end, stop
+                                velocity = 0;
+                                minecartVelocities.put(entityId, velocity);
+                                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Dead end - no rail ahead or to sides",
+                                    entityId);
+                                break;
+                            }
+
+                            // Normalize to cardinal direction
+                            if (Math.abs(worldMoveX) > Math.abs(worldMoveZ)) {
+                                worldMoveX = Math.signum(worldMoveX);
+                                worldMoveZ = 0;
+                            } else {
+                                worldMoveX = 0;
+                                worldMoveZ = Math.signum(worldMoveZ);
+                            }
+
+                            minecartWorldDirection.put(entityId, new double[]{worldMoveX, worldMoveZ});
+                            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: No rail ahead, turning to follow rail: (%.1f, %.1f)",
+                                entityId, worldMoveX, worldMoveZ);
+                        }
+                    }
+
+                    // Keep velocity as magnitude
                     if (velocity < 0) {
                         velocity = Math.abs(velocity);
                         minecartVelocities.put(entityId, velocity);
@@ -710,10 +802,11 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             int rotationIndex = world.getBlockRotationIndex(blockX, blockY, blockZ);
 
             // Extract block ID from toString (format: "BlockType{id=*Rail_State_Definitions_T, ...}")
-            // Block ID tells us the rail type: "_T" = T-junction, "_Corner" = corner, else straight
+            // Block ID tells us the rail type: "_T" = T-junction, "_Corner" = corner, "Accel" = accelerator, else straight
             String blockTypeName = blockType.toString();
             String blockId = null;
             boolean isTByName = false;
+            boolean isAccelByName = false;
             if (blockTypeName != null) {
                 int idStart = blockTypeName.indexOf("id=");
                 if (idStart >= 0) {
@@ -723,6 +816,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                     if (idEnd > idStart) {
                         blockId = blockTypeName.substring(idStart, idEnd).trim();
                         isTByName = blockId.endsWith("_T");
+                        isAccelByName = blockId.contains("Accel") || blockId.contains("_Rail_Accel");
                     }
                 }
             }
@@ -762,13 +856,27 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                     // Corners: raw points from getRailConfig are ALREADY oriented correctly
                     // for the visual appearance, regardless of rotationIndex. No rotation needed.
                     effectiveRotation = 0;
-                } else if (rotationIndex == 0) {
-                    // Flat rails with rotationIndex 0: need neighbor detection for X vs Z alignment
-                    effectiveRotation = detectFlatRailDirectionFromNeighbors(world, blockX, blockY, blockZ);
                 } else {
-                    // Flat rails with rotationIndex set: apply rotation transformation
-                    // Note: rotation appears to be offset by 1 (rotationIndex 1 = 180° visual rotation)
-                    effectiveRotation = (rotationIndex + 1) % 4;
+                    // Straight flat rails: Compare raw point orientation with neighbor expectations
+                    // getRailConfig may return differently oriented points based on rotationIndex
+                    // (e.g., rot=0 gives Z-aligned, rot=1 gives X-aligned)
+                    // Only rotate if raw orientation doesn't match what neighbors expect
+
+                    // Determine raw point orientation
+                    float rawDx = Math.abs(points[points.length-1].point.x - points[0].point.x);
+                    float rawDz = Math.abs(points[points.length-1].point.z - points[0].point.z);
+                    boolean rawIsXAligned = rawDx > rawDz;
+
+                    // Determine desired orientation from neighbors
+                    int neighborDir = detectFlatRailDirectionFromNeighbors(world, blockX, blockY, blockZ);
+                    boolean desiredIsXAligned = (neighborDir == 1);
+
+                    // Only rotate if raw and desired don't match
+                    if (rawIsXAligned != desiredIsXAligned) {
+                        effectiveRotation = 1; // 90° rotation to fix alignment
+                    } else {
+                        effectiveRotation = 0; // No rotation needed, already correct
+                    }
                 }
             }
 
@@ -1057,7 +1165,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 }
             }
 
-            return new RailSnap(snapX, snapY, snapZ, dirX, dirY, dirZ, distSq, blockX, blockY, blockZ, isSlope, cornerFlag, tJunctionFlag, connectedEdges);
+            return new RailSnap(snapX, snapY, snapZ, dirX, dirY, dirZ, distSq, blockX, blockY, blockZ, isSlope, cornerFlag, tJunctionFlag, isAccelByName, connectedEdges);
 
         } catch (Exception e) {
             return null;
@@ -1256,10 +1364,11 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         final boolean isSlope;
         final boolean isCorner;
         final boolean isTJunction;
+        final boolean isAccelerator;
         // Which edges this rail connects to [WEST, EAST, SOUTH, NORTH]
         final boolean[] connectedEdges;
 
-        RailSnap(double x, double y, double z, float dx, float dy, float dz, double distSq, int bx, int by, int bz, boolean isSlope, boolean isCorner, boolean isTJunction, boolean[] connectedEdges) {
+        RailSnap(double x, double y, double z, float dx, float dy, float dz, double distSq, int bx, int by, int bz, boolean isSlope, boolean isCorner, boolean isTJunction, boolean isAccelerator, boolean[] connectedEdges) {
             this.x = x;
             this.y = y;
             this.z = z;
@@ -1273,6 +1382,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             this.isSlope = isSlope;
             this.isCorner = isCorner;
             this.isTJunction = isTJunction;
+            this.isAccelerator = isAccelerator;
             this.connectedEdges = connectedEdges != null ? connectedEdges : new boolean[4];
         }
     }
