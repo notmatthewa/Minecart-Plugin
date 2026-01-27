@@ -48,11 +48,11 @@
                   }
                 },
                 {
-                  "$Comment": "F alone = ride (using custom mount that prevents teleport bug)",
+                  "$Comment": "F alone = ride (using custom server-authoritative mount)",
                   "Type": "Condition",
                   "Crouching": false,
                   "Next": {
-                    "Type": "UsefulMinecartsMount",
+                    "Type": "UsefulMinecartsCustomMount",
                     "AttachmentOffset": {
                       "X": 0,
                       "Y": 1,

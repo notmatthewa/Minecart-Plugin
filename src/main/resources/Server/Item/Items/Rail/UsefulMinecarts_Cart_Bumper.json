@@ -1,0 +1,89 @@
+{
+  "TranslationProperties": {
+    "Name": "items.UsefulMinecarts_Cart_Bumper.name",
+    "Description": "items.UsefulMinecarts_Cart_Bumper.description"
+  },
+  "Icon": "Icons/ItemsGenerated/UsefulMinecarts_Cart_Bumper.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "Set": "Wood_Softwood_Planks",
+  "Recipe": {
+    "TimeSeconds": 1.0,
+    "Input": [
+      {
+        "ItemId": "Rail",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 2
+      }
+    ],
+    "OutputQuantity": 1,
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ]
+      }
+    ]
+  },
+  "BlockType": {
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Tinkering/Rails/Cart_Bumper.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Tinkering/Rails/Cart_Bumper_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "VariantRotation": "NESW",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks"
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "Material": "Solid",
+    "HitboxType": "UsefulMinecarts_Cart_Bumper",
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ]
+    },
+    "ParticleColor": "#8B4513",
+    "BlockSoundSetId": "Wood"
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.6,
+    "Translation": [
+      0,
+      -2
+    ],
+    "Rotation": [
+      30,
+      -45,
+      0
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Rail",
+      "Bumper"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

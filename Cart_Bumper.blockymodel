@@ -1,0 +1,513 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Rail",
+      "position": {"x": 9, "y": 2.1, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {
+        "type": "box",
+        "offset": {"x": 0, "y": 10.5, "z": -14},
+        "stretch": {"x": 0.7, "y": 1, "z": 1},
+        "settings": {
+          "isPiece": false,
+          "size": {"x": 6, "y": 25, "z": 4}
+        },
+        "textureLayout": {
+          "back": {
+            "offset": {"x": 37, "y": 22},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "right": {
+            "offset": {"x": 34, "y": 22},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "front": {
+            "offset": {"x": 41, "y": 22},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "left": {
+            "offset": {"x": 43, "y": 22},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "top": {
+            "offset": {"x": 29, "y": 41},
+            "mirror": {"x": true, "y": true},
+            "angle": 0
+          },
+          "bottom": {
+            "offset": {"x": 29, "y": 55},
+            "mirror": {"x": true, "y": false},
+            "angle": 0
+          }
+        },
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "standard"
+      },
+      "children": [
+        {
+          "id": "2",
+          "name": "Rail--C1",
+          "position": {"x": 1.5, "y": -16.5, "z": 11},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": -1.5, "y": 26.5, "z": -14.5},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 7, "y": 7, "z": 3},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 42, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "right": {
+                "offset": {"x": 39, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 49, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "left": {
+                "offset": {"x": 36, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 49, "y": 57},
+                "mirror": {"x": true, "y": true},
+                "angle": 0
+              },
+              "bottom": {
+                "offset": {"x": 56, "y": 54},
+                "mirror": {"x": true, "y": false},
+                "angle": 0
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        },
+        {
+          "id": "3",
+          "name": "Rail--C2",
+          "position": {"x": -16.5, "y": -16.5, "z": 11},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": -1.5, "y": 26.5, "z": -14.5},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 7, "y": 7, "z": 3},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 42, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "right": {
+                "offset": {"x": 39, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 49, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "left": {
+                "offset": {"x": 36, "y": 57},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 49, "y": 57},
+                "mirror": {"x": true, "y": true},
+                "angle": 0
+              },
+              "bottom": {
+                "offset": {"x": 56, "y": 54},
+                "mirror": {"x": true, "y": false},
+                "angle": 0
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        },
+        {
+          "id": "4",
+          "name": "Rail--C3",
+          "position": {"x": -18, "y": -10.5, "z": 14},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 10.5, "z": -14},
+            "stretch": {"x": 0.7, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 6, "y": 25, "z": 4},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 37, "y": 22},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "right": {
+                "offset": {"x": 34, "y": 22},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 41, "y": 22},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "left": {
+                "offset": {"x": 43, "y": 22},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 29, "y": 41},
+                "mirror": {"x": true, "y": true},
+                "angle": 0
+              },
+              "bottom": {
+                "offset": {"x": 29, "y": 55},
+                "mirror": {"x": true, "y": false},
+                "angle": 0
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        },
+        {
+          "id": "5",
+          "name": "Rail--C4",
+          "position": {"x": -18, "y": -10.5, "z": 18},
+          "orientation": {"x": -0.36244, "y": 0, "z": 0, "w": 0.93201},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 13.5, "z": 0},
+            "stretch": {"x": 0.65, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 6, "y": 31, "z": 4},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 37, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "right": {
+                "offset": {"x": 34, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 41, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "left": {
+                "offset": {"x": 43, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 29, "y": 41},
+                "mirror": {"x": true, "y": true},
+                "angle": 0
+              },
+              "bottom": {
+                "offset": {"x": 29, "y": 55},
+                "mirror": {"x": true, "y": false},
+                "angle": 0
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        },
+        {
+          "id": "6",
+          "name": "Rail--C5",
+          "position": {"x": 0, "y": -10.5, "z": 18},
+          "orientation": {"x": -0.36244, "y": 0, "z": 0, "w": 0.93201},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 13.5, "z": 0},
+            "stretch": {"x": 0.65, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 6, "y": 31, "z": 4},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 37, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "right": {
+                "offset": {"x": 34, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 41, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "left": {
+                "offset": {"x": 43, "y": 16},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 29, "y": 41},
+                "mirror": {"x": true, "y": true},
+                "angle": 0
+              },
+              "bottom": {
+                "offset": {"x": 29, "y": 55},
+                "mirror": {"x": true, "y": false},
+                "angle": 0
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "name": "Rail",
+      "position": {"x": -9, "y": 2.1, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {
+        "type": "none",
+        "offset": {"x": 0, "y": 0, "z": 0},
+        "stretch": {"x": 0, "y": 0, "z": 0},
+        "settings": {
+          "isPiece": false
+        },
+        "textureLayout": {},
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "flat"
+      }
+    },
+    {
+      "id": "8",
+      "name": "Plank",
+      "position": {"x": 0, "y": 2, "z": 9.73904},
+      "orientation": {"x": 0, "y": 0.02285, "z": 0, "w": 0.99974},
+      "shape": {
+        "type": "none",
+        "offset": {"x": 0, "y": 0, "z": 0},
+        "stretch": {"x": 0, "y": 0, "z": 0},
+        "settings": {
+          "isPiece": false
+        },
+        "textureLayout": {},
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "flat"
+      }
+    },
+    {
+      "id": "9",
+      "name": "Plank",
+      "position": {"x": 0, "y": 2, "z": 10},
+      "orientation": {"x": 0, "y": -0.01015, "z": 0, "w": 0.99995},
+      "shape": {
+        "type": "box",
+        "offset": {"x": 0, "y": -0.5, "z": -6.75},
+        "stretch": {"x": 0.90083, "y": 1, "z": 1.125},
+        "settings": {
+          "isPiece": false,
+          "size": {"x": 32, "y": 3, "z": 7}
+        },
+        "textureLayout": {
+          "back": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": true},
+            "angle": 90
+          },
+          "right": {
+            "offset": {"x": 16, "y": 32},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "front": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": true},
+            "angle": 90
+          },
+          "left": {
+            "offset": {"x": 16, "y": 32},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "top": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": false},
+            "angle": 90
+          },
+          "bottom": {
+            "offset": {"x": 33, "y": 0},
+            "mirror": {"x": false, "y": false},
+            "angle": 90
+          }
+        },
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "standard"
+      }
+    },
+    {
+      "id": "10",
+      "name": "Plank",
+      "position": {"x": 0.40607, "y": 2, "z": -11},
+      "orientation": {"x": 0, "y": -0.01015, "z": 0, "w": 0.99995},
+      "shape": {
+        "type": "box",
+        "offset": {"x": -0.40625, "y": -0.5, "z": -3},
+        "stretch": {"x": 0.8965, "y": 1, "z": 1},
+        "settings": {
+          "isPiece": false,
+          "size": {"x": 32, "y": 3, "z": 7}
+        },
+        "textureLayout": {
+          "back": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": true},
+            "angle": 90
+          },
+          "right": {
+            "offset": {"x": 16, "y": 32},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "front": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": true},
+            "angle": 90
+          },
+          "left": {
+            "offset": {"x": 16, "y": 32},
+            "mirror": {"x": false, "y": false},
+            "angle": 0
+          },
+          "top": {
+            "offset": {"x": 23, "y": 0},
+            "mirror": {"x": false, "y": false},
+            "angle": 90
+          },
+          "bottom": {
+            "offset": {"x": 33, "y": 0},
+            "mirror": {"x": false, "y": false},
+            "angle": 90
+          }
+        },
+        "unwrapMode": "custom",
+        "visible": true,
+        "doubleSided": false,
+        "shadingMode": "standard"
+      },
+      "children": [
+        {
+          "id": "11",
+          "name": "Plank--C1",
+          "position": {"x": 0, "y": 10, "z": -2},
+          "orientation": {"x": -0.70686, "y": -0.01851, "z": 0.01851, "w": 0.70686},
+          "shape": {
+            "type": "box",
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 0.8965, "y": 1, "z": 1},
+            "settings": {
+              "isPiece": false,
+              "size": {"x": 32, "y": 3, "z": 7},
+              "isStaticBox": true
+            },
+            "textureLayout": {
+              "back": {
+                "offset": {"x": 23, "y": 0},
+                "mirror": {"x": false, "y": true},
+                "angle": 90
+              },
+              "right": {
+                "offset": {"x": 16, "y": 32},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "front": {
+                "offset": {"x": 23, "y": 0},
+                "mirror": {"x": false, "y": true},
+                "angle": 90
+              },
+              "left": {
+                "offset": {"x": 16, "y": 32},
+                "mirror": {"x": false, "y": false},
+                "angle": 0
+              },
+              "top": {
+                "offset": {"x": 23, "y": 0},
+                "mirror": {"x": false, "y": false},
+                "angle": 90
+              },
+              "bottom": {
+                "offset": {"x": 33, "y": 0},
+                "mirror": {"x": false, "y": false},
+                "angle": 90
+              }
+            },
+            "unwrapMode": "custom",
+            "visible": true,
+            "doubleSided": false,
+            "shadingMode": "standard"
+          }
+        }
+      ]
+    }
+  ],
+  "format": "character",
+  "lod": "auto"
+}

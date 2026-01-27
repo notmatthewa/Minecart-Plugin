@@ -1,0 +1,170 @@
+{
+  "TranslationProperties": {
+    "Name": "items.UsefulMinecarts_Rail_Switch_Right.name",
+    "Description": "items.UsefulMinecarts_Rail_Switch_Right.description"
+  },
+  "Icon": "Icons/ItemsGenerated/UsefulMinecarts_Rail_Switch_Right.png",
+  "Categories": [
+    "Blocks.Deco"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": "Block_Secondary"
+  },
+  "Set": "Wood_Softwood_Planks",
+  "Recipe": {
+    "TimeSeconds": 2.0,
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Copper",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 1
+      }
+    ],
+    "OutputQuantity": 1,
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tinkering"
+        ]
+      }
+    ]
+  },
+  "BlockType": {
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Tinkering/Rails/Rail_Switch_Right_Straight.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Tinkering/Rails/Rail_Switch_Texture.png",
+        "Weight": 1
+      }
+    ],
+    "Group": "Wood",
+    "VariantRotation": "NESW",
+    "Flags": {},
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks"
+      }
+    },
+    "BlockParticleSetId": "Stone",
+    "Material": "Solid",
+    "HitboxType": "UsefulMinecarts_Rail_Switch_Right",
+    "InteractionHint": "items.UsefulMinecarts_Rail_Switch_Right.interact_straight",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "ChangeState",
+            "Changes": {
+              "default": "Right",
+              "Right": "default"
+            }
+          }
+        ]
+      }
+    },
+    "State": {
+      "Definitions": {
+        "Right": {
+          "CustomModel": "Blocks/Tinkering/Rails/Rail_Switch_Right_Right.blockymodel",
+          "InteractionHint": "items.UsefulMinecarts_Rail_Switch_Right.interact_right",
+          "Rail": {
+            "Points": [
+              {
+                "Point": { "X": 1.5, "Y": 0.1, "Z": 0 },
+                "Normal": { "X": 0, "Y": 1, "Z": 0 }
+              },
+              {
+                "Point": { "X": 1.3, "Y": 0.1, "Z": 0.5 },
+                "Normal": { "X": 0, "Y": 1, "Z": 0 }
+              },
+              {
+                "Point": { "X": 1.0, "Y": 0.1, "Z": 1.0 },
+                "Normal": { "X": 0, "Y": 1, "Z": 0 }
+              },
+              {
+                "Point": { "X": 0.7, "Y": 0.1, "Z": 1.5 },
+                "Normal": { "X": 0, "Y": 1, "Z": 0 }
+              },
+              {
+                "Point": { "X": 0.5, "Y": 0.1, "Z": 2.0 },
+                "Normal": { "X": 0, "Y": 1, "Z": 0 }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ],
+      "North": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "South": [
+        {
+          "FaceType": "Rail"
+        }
+      ]
+    },
+    "Supporting": {
+      "North": [
+        {
+          "FaceType": "Rail"
+        }
+      ],
+      "South": [
+        {
+          "FaceType": "Rail"
+        }
+      ]
+    },
+    "ParticleColor": "#8B4513",
+    "BlockSoundSetId": "Metal",
+    "Rail": {
+      "Points": [
+        {
+          "Point": { "X": 1.5, "Y": 0.1, "Z": 0 },
+          "Normal": { "X": 0, "Y": 1, "Z": 0 }
+        },
+        {
+          "Point": { "X": 1.5, "Y": 0.1, "Z": 1.0 },
+          "Normal": { "X": 0, "Y": 1, "Z": 0 }
+        },
+        {
+          "Point": { "X": 1.5, "Y": 0.1, "Z": 2.0 },
+          "Normal": { "X": 0, "Y": 1, "Z": 0 }
+        }
+      ]
+    },
+    "Footprint": {
+      "Size": { "X": 2, "Y": 1, "Z": 2 },
+      "PlacementRequirement": "FlatSurface"
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.5,
+    "Translation": [ 0, -2 ],
+    "Rotation": [ 45, -45, 0 ]
+  },
+  "Tags": {
+    "Type": [
+      "Rail",
+      "Switch"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

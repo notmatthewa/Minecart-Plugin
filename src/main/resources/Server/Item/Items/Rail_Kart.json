@@ -1,0 +1,58 @@
+{
+  "$Comment": "Override of vanilla Rail_Kart to use UsefulMinecarts custom mount system",
+  "TranslationProperties": {
+    "Name": "items.Rail_Kart.name",
+    "Description": "items.Rail_Kart.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rail_Kart.png",
+  "Categories": [
+    "Furniture.Benches"
+  ],
+  "Interactions": {
+    "Primary": "Block_Primary",
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "SpawnMinecart",
+          "Model": "Minecart",
+          "CartInteractions": {
+            "Use": {
+              "Interactions": [
+                {
+                  "$Comment": "F = ride using custom server-authoritative mount",
+                  "Type": "UsefulMinecartsCustomMount",
+                  "AttachmentOffset": {
+                    "X": 0,
+                    "Y": 1,
+                    "Z": 0.3
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Type": "ModifyInventory",
+          "AdjustHeldItemQuantity": -1
+        }
+      ]
+    }
+  },
+  "Set": "Furniture_Jungle",
+  "PlayerAnimationsId": "Item",
+  "Model": "Items/Vehicles/Rail_Kart.blockymodel",
+  "Texture": "Items/Vehicles/Rail_Kart_Texture.png",
+  "IconProperties": {
+    "Scale": 0.55,
+    "Translation": [
+      0,
+      -15
+    ],
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ]
+  },
+  "MaxStack": 1
+}

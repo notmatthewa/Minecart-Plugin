@@ -1,0 +1,43 @@
+{
+  "StartState": "start",
+  "Type": "Generic",
+  "Appearance": "Chicken_Tied",
+  "NameTranslationKey": "server.npcRoles.Chicken_Tied.name",
+  "MaxHealth": 29,
+  "DefaultPlayerAttitude": "NEUTRAL",
+  "DefaultNPCAttitude": "NEUTRAL",
+  "Invulnerable": false,
+  "KnockbackScale": 1.0,
+  "BreathesInAir": true,
+  "BreathesInWater": false,
+  "DropList": "Drop_Chicken",
+  "BusyStates": [],
+  "MotionControllerList": [
+    {
+      "Type": "Walk",
+      "MaxWalkSpeed": 0.1,
+      "MinWalkSpeed": 0.1,
+      "Gravity": 10,
+      "RunThreshold": 1.0,
+      "MaxFallSpeed": 15,
+      "MaxRotationSpeed": 0.1,
+      "Acceleration": 0.1,
+      "MaxClimbHeight": 0.1,
+      "MinJumpHeight": 0.1
+    }
+  ],
+  "Instructions": [
+    {
+      "Instructions": [
+        {
+          "Sensor": {
+            "Type": "Any"
+          },
+          "BodyMotion": {
+            "Type": "Nothing"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -207,6 +207,15 @@ public class ChestMinecartStorage {
     }
 
     /**
+     * Get an inventory for a minecart only if it exists.
+     * Does NOT create a new inventory if one doesn't exist.
+     * Used by the death system to check if a cart has stored items.
+     */
+    public static SimpleItemContainer getInventoryIfExists(UUID minecartUuid) {
+        return inventories.get(minecartUuid);
+    }
+
+    /**
      * Simple data class for saved items.
      */
     private static class SavedItem {

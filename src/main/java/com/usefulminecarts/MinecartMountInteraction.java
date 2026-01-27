@@ -106,12 +106,20 @@ public class MinecartMountInteraction extends SimpleInstantInteraction {
             }
         }
 
-        // Add MountedComponent to player (standard mounting)
+        // Add MountedComponent to player with Minecart controller for proper visual mounting
+        // Note: We track our own rider state separately to handle physics
         commandBuffer.addComponent(
             playerEntity,
             MountedComponent.getComponentType(),
             new MountedComponent(targetEntity, attachmentOffset, MountController.Minecart)
         );
+
+        // Also add to our custom rider tracker for physics processing
+        NetworkId cartNetworkId = commandBuffer.getComponent(targetEntity, NetworkId.getComponentType());
+        if (cartNetworkId != null) {
+            MinecartRiderTracker.setRider(cartNetworkId.getId(), playerEntity);
+            LOGGER.atInfo().log("[MinecartMount] Added rider tracking for cart %d", cartNetworkId.getId());
+        }
 
         // === KEY FIX: Teleport player TO the minecart ===
         if (minecartPos != null) {

@@ -40,10 +40,19 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         // Load physics configuration from file
         MinecartConfig.load();
 
+        // Register our custom rider component (for server-authoritative riding)
+        var riderComponentType = this.getEntityStoreRegistry()
+            .registerComponent(CustomMinecartRiderComponent.class, "CustomMinecartRider", CustomMinecartRiderComponent.CODEC);
+        CustomMinecartRiderComponent.setComponentType(riderComponentType);
+        getLogger().atInfo().log("[UsefulMinecarts] Registered CustomMinecartRiderComponent");
+
         // Register our custom interaction types
         var interactions = this.getCodecRegistry(Interaction.CODEC);
         interactions.register("UsefulMinecartsOpenChestCart", OpenChestCartInteraction.class, OpenChestCartInteraction.CODEC);
         interactions.register("UsefulMinecartsMount", MinecartMountInteraction.class, MinecartMountInteraction.CODEC);
+        interactions.register("UsefulMinecartsCustomMount", CustomMinecartMount.class, CustomMinecartMount.CODEC);
+        interactions.register("UsefulMinecartsTiedChicken", TiedChickenPlaceSystem.class, TiedChickenPlaceSystem.CODEC);
+        getLogger().atInfo().log("[UsefulMinecarts] Registered CustomMinecartMount and TiedChicken interactions");
 
         // Register minecart physics commands
         this.getCommandRegistry().registerCommand(new MinecartCommands());
@@ -52,17 +61,24 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         // Initialize storage (just sets up directory, no loading)
         ChestMinecartStorage.init();
 
-        // Register position tracking (runs BEFORE HandleMountInput)
-        this.getEntityStoreRegistry().registerSystem(new MinecartPositionTracker());
+        // Register input interceptor (runs BEFORE HandleMountInput to clear movement queue)
+        this.getEntityStoreRegistry().registerSystem(new MinecartInputInterceptor());
 
-        // Register the rail snap system (runs AFTER HandleMountInput to restore positions)
-        this.getEntityStoreRegistry().registerSystem(new MinecartRailSnapSystem());
-
-        // Register the physics system for autonomous minecart movement
+        // Register the physics system (runs BEFORE HandleMountInput, calculates positions)
         this.getEntityStoreRegistry().registerSystem(new MinecartPhysicsSystem());
+
+        // Register the rail snap system (runs AFTER HandleMountInput to restore physics positions)
+        // This restores the position calculated by MinecartPhysicsSystem after client overrides it
+        this.getEntityStoreRegistry().registerSystem(new MinecartRailSnapSystem());
 
         // Register the rail debug system for /mc railinfo command
         this.getEntityStoreRegistry().registerSystem(new RailDebugSystem());
+
+        // Register the chest cart death system for dropping items when cart is destroyed
+        this.getEntityStoreRegistry().registerSystem(new ChestCartDeathSystem());
+
+        // Register the custom minecart riding system (positions riders on carts)
+        this.getEntityStoreRegistry().registerSystem(new CustomMinecartRidingSystem());
 
         getLogger().atInfo().log("UsefulMinecarts loaded - Chest Rail Cart ready!");
         getLogger().atInfo().log("Edit physics_config.properties to configure minecart physics");

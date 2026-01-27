@@ -1,0 +1,113 @@
+{
+  "Model": "NPC/Livestock/Chicken_Tied/Models/Model.blockymodel",
+  "Texture": "NPC/Livestock/Chicken_Tied/Models/Texture.png",
+  "EyeHeight": 0.7,
+  "CrouchOffset": -0.2,
+  "HitBox": {
+    "Max": {
+      "X": 0.35,
+      "Y": 0.9,
+      "Z": 0.35
+    },
+    "Min": {
+      "X": -0.35,
+      "Y": 0,
+      "Z": -0.35
+    }
+  },
+  "MinScale": 0.8,
+  "MaxScale": 1.2,
+  "AnimationSets": {
+    "Idle": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Idle.blockyanim"
+        }
+      ]
+    },
+    "Spawn": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Spawn.blockyanim",
+          "BlendingDuration": 0,
+          "Looping": false
+        }
+      ]
+    },
+    "Alerted": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Alerted.blockyanim",
+          "Looping": false,
+          "SoundEventId": "SFX_Chicken_Alerted"
+        },
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Alerted2.blockyanim",
+          "Looping": false,
+          "SoundEventId": "SFX_Chicken_Alerted"
+        }
+      ]
+    },
+    "IdlePassive": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Flavor/Look_Left.blockyanim"
+        },
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Flavor/Peck.blockyanim"
+        }
+      ],
+      "NextAnimationDelay": {
+        "Max": 10,
+        "Min": 2
+      }
+    },
+    "Hurt": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Damage/Hurt.blockyanim",
+          "BlendingDuration": 0.1,
+          "Looping": false,
+          "SoundEventId": "SFX_Chicken_Hurt"
+        }
+      ]
+    },
+    "Death": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Damage/Death.blockyanim",
+          "Looping": false,
+          "SoundEventId": "SFX_Chicken_Death"
+        }
+      ]
+    },
+    "Walk": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Idle.blockyanim"
+        }
+      ]
+    },
+    "Run": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Idle.blockyanim"
+        }
+      ]
+    },
+    "Fall": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Idle.blockyanim"
+        }
+      ]
+    },
+    "Jump": {
+      "Animations": [
+        {
+          "Animation": "NPC/Livestock/Chicken/Animations/Default/Idle.blockyanim"
+        }
+      ]
+    }
+  }
+}

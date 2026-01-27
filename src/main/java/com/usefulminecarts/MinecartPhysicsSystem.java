@@ -1,29 +1,40 @@
 package com.usefulminecarts;
 
 import com.hypixel.hytale.builtin.mounts.MountedByComponent;
+import com.hypixel.hytale.builtin.mounts.MountedComponent;
+import com.hypixel.hytale.builtin.mounts.MountSystems;
 import com.hypixel.hytale.builtin.mounts.minecart.MinecartComponent;
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.dependency.Dependency;
+import com.hypixel.hytale.component.dependency.Order;
+import com.hypixel.hytale.component.dependency.OrderPriority;
+import com.hypixel.hytale.component.dependency.SystemDependency;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.protocol.RailConfig;
 import com.hypixel.hytale.protocol.RailPoint;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-import javax.annotation.Nonnull;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.Nonnull;
 
 /**
  * Physics system for unmounted minecarts.
@@ -154,11 +165,128 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         return EDGE_SOUTH;
     }
 
+    /**
+     * Check if there's a bumper block at the given position and return the edge it blocks.
+     * Bumpers are rotatable blocks that reverse cart direction.
+     *
+     * Rotation mapping (default model faces NORTH, placed at south end of track):
+     * - rot 0: blocks SOUTH edge (carts moving +Z hit it and reverse to -Z)
+     * - rot 1: blocks WEST edge (carts moving -X hit it and reverse to +X)
+     * - rot 2: blocks NORTH edge (carts moving -Z hit it and reverse to +Z)
+     * - rot 3: blocks EAST edge (carts moving +X hit it and reverse to -X)
+     *
+     * @return The edge that the bumper blocks, or -1 if no bumper at this position
+     */
+    private int checkForBumper(World world, int x, int y, int z) {
+        BlockType blockType = world.getBlockType(x, y, z);
+        if (blockType == null) return -1;
+
+        String blockTypeName = blockType.toString();
+        if (blockTypeName == null) return -1;
+
+        // Extract block ID for checking
+        String blockId = "";
+        int idStart = blockTypeName.indexOf("id=");
+        if (idStart >= 0) {
+            idStart += 3;
+            int idEnd = blockTypeName.indexOf(",", idStart);
+            if (idEnd < 0) idEnd = blockTypeName.indexOf("}", idStart);
+            if (idEnd > idStart) {
+                blockId = blockTypeName.substring(idStart, idEnd).trim();
+            }
+        }
+
+        if (!blockId.contains("Cart_Bumper") && !blockTypeName.contains("Cart_Bumper")) {
+            return -1;
+        }
+
+        // Get rotation index
+        int rotationIndex = world.getBlockRotationIndex(x, y, z);
+
+        LOGGER.atInfo().log("[MinecartPhysics] Found bumper at (%d,%d,%d), blockId=%s, rotation=%d",
+            x, y, z, blockId, rotationIndex);
+
+        // Map rotation to blocked edge
+        // Default (rot 0): bumper wall faces north, blocks carts moving south (+Z)
+        // The bumper is placed at the END of a track, facing the incoming carts
+        switch (rotationIndex % 4) {
+            case 0: return EDGE_SOUTH;  // Wall faces north, blocks +Z movement
+            case 1: return EDGE_EAST;   // Wall faces west, blocks +X movement
+            case 2: return EDGE_NORTH;  // Wall faces south, blocks -Z movement
+            case 3: return EDGE_WEST;   // Wall faces east, blocks -X movement
+            default: return -1;
+        }
+    }
+
+    /**
+     * Get the edge a cart is moving towards based on world movement direction.
+     */
+    private int getMovementEdge(double worldMoveX, double worldMoveZ) {
+        if (Math.abs(worldMoveX) > Math.abs(worldMoveZ)) {
+            return worldMoveX > 0 ? EDGE_EAST : EDGE_WEST;
+        } else {
+            return worldMoveZ > 0 ? EDGE_SOUTH : EDGE_NORTH;
+        }
+    }
+
+    /**
+     * Check if a block is solid (would stop a minecart).
+     * Returns true if the block exists and is not air/transparent/rail.
+     */
+    private boolean isSolidBlock(World world, int x, int y, int z) {
+        BlockType blockType = world.getBlockType(x, y, z);
+        if (blockType == null) return false;
+
+        String blockTypeName = blockType.toString();
+        if (blockTypeName == null) return false;
+
+        // Check if it's air or empty
+        if (blockTypeName.contains("Air") || blockTypeName.contains("Empty")) {
+            return false;
+        }
+
+        // Check if it's a rail (rails are not solid obstacles)
+        RailConfig railConfig = blockType.getRailConfig(0);
+        if (railConfig != null && railConfig.points != null && railConfig.points.length >= 2) {
+            return false; // It's a rail, not a solid block
+        }
+
+        // Check if it's a bumper (handled separately)
+        if (blockTypeName.contains("Cart_Bumper")) {
+            return false; // Bumpers are handled by the bumper logic
+        }
+
+        // Any other block with content is considered solid
+        return true;
+    }
+
+    /**
+     * Get the block offset for a given edge direction.
+     */
+    private int[] getBlockOffsetForEdge(int edge) {
+        switch (edge) {
+            case EDGE_WEST: return new int[]{-1, 0};
+            case EDGE_EAST: return new int[]{1, 0};
+            case EDGE_SOUTH: return new int[]{0, 1};
+            case EDGE_NORTH: return new int[]{0, -1};
+            default: return new int[]{0, 0};
+        }
+    }
+
     @Nonnull
     private final Query<EntityStore> query;
 
+    // Run BEFORE HandleMountInput so our physics position is calculated first
+    // Then HandleMountInput will overwrite with client position
+    // Then MinecartRailSnapSystem will restore to our physics position
+    @Nonnull
+    private final Set<Dependency<EntityStore>> dependencies;
+
     public MinecartPhysicsSystem() {
         this.query = Query.and(MinecartComponent.getComponentType());
+        this.dependencies = Set.of(
+            new SystemDependency<>(Order.BEFORE, MountSystems.HandleMountInput.class, OrderPriority.CLOSEST)
+        );
         LOGGER.atInfo().log("[MinecartPhysics] Physics system initialized!");
     }
 
@@ -166,6 +294,12 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
     @Override
     public Query<EntityStore> getQuery() {
         return this.query;
+    }
+
+    @Nonnull
+    @Override
+    public Set<Dependency<EntityStore>> getDependencies() {
+        return this.dependencies;
     }
 
     @Override
@@ -180,14 +314,82 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         Ref<EntityStore> minecartRef = archetypeChunk.getReferenceTo(index);
         boolean shouldLog = (tickCount % 4 == 0);
 
-        MountedByComponent mountedBy = store.getComponent(minecartRef, MountedByComponent.getComponentType());
-        if (mountedBy != null && !mountedBy.getPassengers().isEmpty()) {
-            return;
-        }
-
         NetworkId networkId = store.getComponent(minecartRef, NetworkId.getComponentType());
         if (networkId == null) return;
         int entityId = networkId.getId();
+
+        // Check if cart is mounted - check both vanilla MountedByComponent AND our custom tracker
+        MountedByComponent mountedBy = store.getComponent(minecartRef, MountedByComponent.getComponentType());
+        boolean hasVanillaMounted = mountedBy != null && !mountedBy.getPassengers().isEmpty();
+        boolean hasCustomMounted = MinecartRiderTracker.hasRider(entityId);
+        boolean isMounted = hasVanillaMounted || hasCustomMounted;
+
+        boolean riderWantsForward = false;
+        boolean riderWantsBackward = false;
+        Ref<EntityStore> riderRef = null;
+
+        // Get rider reference from either system
+        if (hasCustomMounted) {
+            riderRef = MinecartRiderTracker.getRider(entityId);
+        } else if (hasVanillaMounted) {
+            List<Ref<EntityStore>> passengers = mountedBy.getPassengers();
+            if (!passengers.isEmpty()) {
+                riderRef = passengers.get(0);
+            }
+        }
+
+        // Get rider input if we have a rider
+        // With NPC-style mount, the client sends movement states to the CART, not the player
+        // So we check BOTH the cart's MovementStatesComponent AND the rider's
+        if (isMounted) {
+            // First, check the cart's MovementStatesComponent (NPC-style mount sends here)
+            MovementStatesComponent cartMoveComp = store.getComponent(minecartRef, MovementStatesComponent.getComponentType());
+            if (cartMoveComp != null) {
+                MovementStates cartStates = cartMoveComp.getMovementStates();
+                if (cartStates != null) {
+                    // W key = walking forward, S key = crouching (for backward)
+                    if (cartStates.walking || cartStates.running || cartStates.sprinting) {
+                        riderWantsForward = true;
+                        if (shouldLog) {
+                            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from cart MovementStates - FORWARD (walking=%b, running=%b, sprinting=%b)",
+                                entityId, cartStates.walking, cartStates.running, cartStates.sprinting);
+                        }
+                    }
+                    if (cartStates.crouching) {
+                        riderWantsBackward = true;
+                        if (shouldLog) {
+                            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from cart MovementStates - BACKWARD (crouching=%b)",
+                                entityId, cartStates.crouching);
+                        }
+                    }
+                }
+            }
+
+            // Also check the rider's MovementStatesComponent (vanilla mount may use this)
+            if (riderRef != null && riderRef.isValid()) {
+                MovementStatesComponent riderMoveComp = store.getComponent(riderRef, MovementStatesComponent.getComponentType());
+                if (riderMoveComp != null) {
+                    MovementStates states = riderMoveComp.getMovementStates();
+                    if (states != null) {
+                        // W key = walking forward, S key = crouching (we use this for backward)
+                        if (states.walking || states.running || states.sprinting) {
+                            if (!riderWantsForward && shouldLog) {
+                                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from rider MovementStates - FORWARD",
+                                    entityId);
+                            }
+                            riderWantsForward = true;
+                        }
+                        if (states.crouching) {
+                            if (!riderWantsBackward && shouldLog) {
+                                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from rider MovementStates - BACKWARD",
+                                    entityId);
+                            }
+                            riderWantsBackward = true;
+                        }
+                    }
+                }
+            }
+        }
 
         TransformComponent transform = commandBuffer.getComponent(minecartRef, TransformComponent.getComponentType());
         if (transform == null) return;
@@ -272,6 +474,83 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         // Apply friction (reduces magnitude regardless of sign)
         velocity *= MinecartConfig.getFriction();
 
+        // Apply player input for mounted carts
+        // Input is relative to player's facing direction vs cart's movement direction
+        if (isMounted && (riderWantsForward || riderWantsBackward)) {
+            double playerInputStrength = MinecartConfig.getPlayerInputStrength();
+
+            // Get player facing direction
+            double playerFacingX = 0, playerFacingZ = 1; // Default: facing +Z
+            if (riderRef != null && riderRef.isValid()) {
+                TransformComponent riderTransform = store.getComponent(riderRef, TransformComponent.getComponentType());
+                if (riderTransform != null) {
+                    Vector3f riderRot = riderTransform.getRotation();
+                    float playerYaw = riderRot.getYaw();
+                    // Convert yaw to direction vector (yaw 0 = +Z, yaw PI/2 = +X)
+                    playerFacingX = Math.sin(playerYaw);
+                    playerFacingZ = Math.cos(playerYaw);
+                }
+            }
+
+            // Round player facing to nearest cardinal direction along the rail
+            // Rail direction from snap tells us which axis the rail is on
+            double railAxisX = Math.abs(snap.dirX);
+            double railAxisZ = Math.abs(snap.dirZ);
+            double playerDirOnRail;
+
+            if (railAxisX > railAxisZ) {
+                // Rail runs E-W (X axis) - use player's X component
+                playerDirOnRail = playerFacingX > 0 ? 1 : -1;
+                playerFacingX = playerDirOnRail;
+                playerFacingZ = 0;
+            } else {
+                // Rail runs N-S (Z axis) - use player's Z component
+                playerDirOnRail = playerFacingZ > 0 ? 1 : -1;
+                playerFacingX = 0;
+                playerFacingZ = playerDirOnRail;
+            }
+
+            // Handle stationary cart - initialize direction from player facing
+            if (Math.abs(velocity) < MinecartConfig.getMinSpeed() && riderWantsForward) {
+                // Cart is stationary - start moving in player's facing direction
+                velocity = playerInputStrength * dt;
+                persistedDirForSnap = new double[]{playerFacingX, playerFacingZ};
+                minecartWorldDirection.put(entityId, persistedDirForSnap);
+            } else if (persistedDirForSnap != null) {
+                // Cart is moving - check if player wants to accelerate or brake
+                double cartDirX = persistedDirForSnap[0];
+                double cartDirZ = persistedDirForSnap[1];
+
+                // Dot product to determine if player is facing same direction as cart
+                double facingDot = playerFacingX * cartDirX + playerFacingZ * cartDirZ;
+                boolean playerFacingForward = facingDot >= 0;
+
+                if (riderWantsForward) {
+                    // W key pressed - accelerate in direction player is facing
+                    if (playerFacingForward) {
+                        // Player facing same direction as cart - speed up
+                        velocity += playerInputStrength * dt;
+                    } else {
+                        // Player facing opposite direction - slow down or reverse
+                        velocity -= playerInputStrength * dt;
+                        if (velocity < 0) {
+                            // Reversed direction
+                            velocity = Math.abs(velocity);
+                            persistedDirForSnap[0] = -persistedDirForSnap[0];
+                            persistedDirForSnap[1] = -persistedDirForSnap[1];
+                            minecartWorldDirection.put(entityId, persistedDirForSnap);
+                        }
+                    }
+                } else if (riderWantsBackward) {
+                    // S key pressed - brake (slow down in current direction)
+                    velocity -= playerInputStrength * dt * 1.5; // Braking is stronger
+                    if (velocity < 0) {
+                        velocity = 0; // Don't reverse with S, just stop
+                    }
+                }
+            }
+        }
+
         // Apply accelerator rail boost (multiplier)
         if (snap.isAccelerator) {
             velocity *= MinecartConfig.getAcceleratorBoost();
@@ -315,7 +594,19 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         double[] persistedDir = minecartWorldDirection.get(entityId);
         double worldMoveX, worldMoveZ;
 
-        if (persistedDir != null) {
+        // For switches, use segment direction directly to follow curves
+        // For other rails, use cardinal directions to avoid drift
+        if (snap.isSwitch) {
+            // Use current segment direction for switches (already flipped for backward movement)
+            worldMoveX = snap.dirX;
+            worldMoveZ = snap.dirZ;
+            // Normalize
+            double len = Math.sqrt(worldMoveX * worldMoveX + worldMoveZ * worldMoveZ);
+            if (len > 0.01) {
+                worldMoveX /= len;
+                worldMoveZ /= len;
+            }
+        } else if (persistedDir != null) {
             // Use persisted direction from previous tick
             worldMoveX = persistedDir[0];
             worldMoveZ = persistedDir[1];
@@ -365,6 +656,9 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             minecartVelocities.put(entityId, velocity);
         }
 
+        // Track if we hit a bumper (to preserve velocity after break)
+        boolean hitBumper = false;
+
         // Sub-step movement to follow rails properly at high speeds
         for (int step = 0; step < numSteps; step++) {
             // Move one step using WORLD direction (not rail segment direction)
@@ -386,6 +680,99 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             double stepY = newY + stepMoveY;
             double stepZ = newZ + stepMoveZ;
 
+            // Check if we're crossing into a new block - if so, check for obstacles FIRST
+            int currentBlockX = (int) Math.floor(newX);
+            int currentBlockY = (int) Math.floor(newY);
+            int currentBlockZ = (int) Math.floor(newZ);
+            int stepBlockX = (int) Math.floor(stepX);
+            int stepBlockY = (int) Math.floor(stepY);
+            int stepBlockZ = (int) Math.floor(stepZ);
+
+            boolean crossingBlockBoundary = (stepBlockX != currentBlockX || stepBlockZ != currentBlockZ);
+
+            if (crossingBlockBoundary) {
+                // Check the block we're about to enter for obstacles BEFORE moving
+                int cartMovementEdge = getMovementEdge(worldMoveX, worldMoveZ);
+
+                // Check for bumper in the block we're entering
+                int bumperBlockedEdge = checkForBumper(world, stepBlockX, stepBlockY, stepBlockZ);
+
+                if (bumperBlockedEdge >= 0 && bumperBlockedEdge == cartMovementEdge) {
+                    // Cart is about to hit a bumper - stop at edge and reverse!
+                    // Position cart at the edge of the current block (just before the bumper)
+                    double edgeX = newX;
+                    double edgeZ = newZ;
+                    double edgeOffset = 0.1; // Offset to stay clearly inside current block
+
+                    if (worldMoveX > 0) {
+                        edgeX = Math.floor(newX) + 1.0 - edgeOffset; // East edge
+                    } else if (worldMoveX < 0) {
+                        edgeX = Math.floor(newX) + edgeOffset; // West edge
+                    }
+                    if (worldMoveZ > 0) {
+                        edgeZ = Math.floor(newZ) + 1.0 - edgeOffset; // South edge
+                    } else if (worldMoveZ < 0) {
+                        edgeZ = Math.floor(newZ) + edgeOffset; // North edge
+                    }
+
+                    newX = edgeX;
+                    newZ = edgeZ;
+
+                    // Reverse direction
+                    worldMoveX = -worldMoveX;
+                    worldMoveZ = -worldMoveZ;
+                    minecartWorldDirection.put(entityId, new double[]{worldMoveX, worldMoveZ});
+
+                    // Keep velocity high - only small friction on bounce
+                    velocity *= 0.95;
+                    minecartVelocities.put(entityId, velocity);
+
+                    LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Hit bumper at (%d,%d,%d), reversing at edge (%.2f, %.2f), vel=%.2f",
+                        entityId, stepBlockX, stepBlockY, stepBlockZ, newX, newZ, velocity);
+
+                    // Mark that we hit a bumper (to preserve velocity after break)
+                    hitBumper = true;
+
+                    // Break out of step loop - let next tick continue with reversed direction
+                    // This ensures clean state for the next movement calculation
+                    break;
+                }
+
+                // Check for solid block collision - but only if there's no rail at that position
+                // This prevents false collisions with support blocks under rails (especially at slope transitions)
+                boolean hasRailAtStep = hasRailAt(world, stepBlockX, stepBlockY, stepBlockZ)
+                                     || hasRailAt(world, stepBlockX, stepBlockY + 1, stepBlockZ)
+                                     || hasRailAt(world, stepBlockX, stepBlockY - 1, stepBlockZ);
+
+                if (!hasRailAtStep && isSolidBlock(world, stepBlockX, stepBlockY, stepBlockZ)) {
+                    // Position cart at the edge of the current block
+                    double edgeX = newX;
+                    double edgeZ = newZ;
+                    double edgeOffset = 0.02;
+
+                    if (worldMoveX > 0) {
+                        edgeX = Math.floor(newX) + 1.0 - edgeOffset;
+                    } else if (worldMoveX < 0) {
+                        edgeX = Math.floor(newX) + edgeOffset;
+                    }
+                    if (worldMoveZ > 0) {
+                        edgeZ = Math.floor(newZ) + 1.0 - edgeOffset;
+                    } else if (worldMoveZ < 0) {
+                        edgeZ = Math.floor(newZ) + edgeOffset;
+                    }
+
+                    newX = edgeX;
+                    newZ = edgeZ;
+
+                    LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Hit solid block at (%d,%d,%d), stopping at edge (%.2f, %.2f)",
+                        entityId, stepBlockX, stepBlockY, stepBlockZ, newX, newZ);
+
+                    velocity = 0;
+                    minecartVelocities.put(entityId, velocity);
+                    break;
+                }
+            }
+
             // Use world movement direction for rail search
             float moveDirX = (float) worldMoveX;
             float moveDirZ = (float) worldMoveZ;
@@ -395,7 +782,9 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             newSnap = findBestRailSnapWithDirection(world, stepPos, moveDirX, moveDirZ);
 
             if (newSnap == null) {
-                // No rail found - stop at current position
+                // No rail found - end of track, stop at current position
+                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: End of track at (%.2f,%.2f,%.2f)",
+                    entityId, stepX, stepY, stepZ);
                 velocity = 0;
                 minecartVelocities.put(entityId, velocity);
                 break;
@@ -613,10 +1002,21 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             newY = newSnap.y;
             newZ = newSnap.z;
             currentSnap = newSnap;
+
+            // For switches, update worldMoveX/Z to follow the curve at each step
+            if (newSnap.isSwitch) {
+                worldMoveX = newSnap.dirX;
+                worldMoveZ = newSnap.dirZ;
+                double len = Math.sqrt(worldMoveX * worldMoveX + worldMoveZ * worldMoveZ);
+                if (len > 0.01) {
+                    worldMoveX /= len;
+                    worldMoveZ /= len;
+                }
+            }
         }
 
-        if (newSnap == null) {
-            // No rail found - stop at current position
+        if (newSnap == null && !hitBumper) {
+            // No rail found and didn't hit a bumper - stop at current position
             newX = snap.x;
             newY = snap.y;
             newZ = snap.z;
@@ -638,8 +1038,15 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
         // Update rotation - instant snap to movement direction
         if (Math.abs(velocity) > MinecartConfig.getMinSpeed()) {
-            // Use world movement direction for rotation (not rail segment direction)
-            float targetYaw = (float) Math.atan2(worldMoveX, worldMoveZ);
+            float targetYaw;
+            if (finalSnap.isSwitch || finalSnap.isCorner) {
+                // For switches and corners, use rail segment direction so cart curves smoothly
+                // The segment direction is already aligned to cart's movement (flipped if needed)
+                targetYaw = (float) Math.atan2(finalSnap.dirX, finalSnap.dirZ);
+            } else {
+                // For straight rails, use world movement direction
+                targetYaw = (float) Math.atan2(worldMoveX, worldMoveZ);
+            }
             rotation.setYaw(targetYaw);
             minecartFacingYaw.put(entityId, targetYaw);
 
@@ -656,14 +1063,42 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             rotation.setPitch(targetPitch);
         }
 
+        // Update cart position
         transform.getPosition().x = newX;
         transform.getPosition().y = newY;
         transform.getPosition().z = newZ;
 
+        // Store physics position for MinecartRailSnapSystem to restore after HandleMountInput
+        // This is the key to server-authoritative physics - we calculate first, then restore after client overrides
+        MinecartPositionTracker.trackedPositions.put(entityId, new Vector3d(newX, newY, newZ));
+
+        // Update position for CustomMinecartRidingSystem (for our custom rider positioning)
+        CustomMinecartRidingSystem.updateCartPosition(entityId, newX, newY, newZ);
+
+        // Clean up rider tracking if rider dismounted (check both vanilla and custom components)
+        if (MinecartRiderTracker.hasRider(entityId)) {
+            Ref<EntityStore> trackedRider = MinecartRiderTracker.getRider(entityId);
+            if (trackedRider == null || !trackedRider.isValid()) {
+                // Rider ref is invalid, clean up
+                MinecartRiderTracker.removeRider(entityId);
+                CustomMinecartRidingSystem.removeCart(entityId);
+            } else {
+                // Check if rider still has our custom component OR vanilla MountedComponent
+                CustomMinecartRiderComponent customRider = store.getComponent(trackedRider, CustomMinecartRiderComponent.getComponentType());
+                MountedComponent vanillaRider = store.getComponent(trackedRider, MountedComponent.getComponentType());
+                if (customRider == null && vanillaRider == null) {
+                    // Rider dismounted from both systems
+                    MinecartRiderTracker.removeRider(entityId);
+                    CustomMinecartRidingSystem.removeCart(entityId);
+                    LOGGER.atInfo().log("[MinecartPhysics] Rider dismounted from cart %d", entityId);
+                }
+            }
+        }
+
         if (shouldLog) {
-            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: vel=%.2f, pos=(%.2f,%.2f,%.2f), railDir=(%.2f,%.2f,%.2f), block=(%d,%d,%d), slope=%b, steps=%d",
+            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: vel=%.2f, pos=(%.2f,%.2f,%.2f), railDir=(%.2f,%.2f,%.2f), block=(%d,%d,%d), slope=%b, steps=%d, mounted=%b",
                 entityId, velocity, newX, newY, newZ, finalSnap.dirX, finalSnap.dirY, finalSnap.dirZ,
-                finalSnap.blockX, finalSnap.blockY, finalSnap.blockZ, finalSnap.isSlope, numSteps);
+                finalSnap.blockX, finalSnap.blockY, finalSnap.blockZ, finalSnap.isSlope, numSteps, isMounted);
         }
     }
 
@@ -807,6 +1242,8 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             String blockId = null;
             boolean isTByName = false;
             boolean isAccelByName = false;
+            boolean isSwitchByName = false;
+            boolean isSwitchLeft = false;
             if (blockTypeName != null) {
                 int idStart = blockTypeName.indexOf("id=");
                 if (idStart >= 0) {
@@ -817,7 +1254,67 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                         blockId = blockTypeName.substring(idStart, idEnd).trim();
                         isTByName = blockId.endsWith("_T");
                         isAccelByName = blockId.contains("Accel") || blockId.contains("_Rail_Accel");
+                        isSwitchByName = blockId.contains("Rail_Switch") || blockId.contains("_Switch");
+                        isSwitchLeft = blockId.contains("_Left") || blockId.contains("State_Definitions_Left");
                     }
+                }
+            }
+
+            // Switch blocks are detected but handled through their rail points defined in JSON
+            // The rail points in the block definition guide the cart along the correct path
+
+            // For multi-block footprint blocks (like 2x2 switch), find the origin block
+            // The origin is the minimum X and Z that has the SAME block type (exact match)
+            // This prevents adjacent switches from being confused with each other
+            int originX = blockX;
+            int originZ = blockZ;
+            if (isSwitchByName) {
+                // Get the exact block type string for comparison
+                String currentBlockType = blockTypeName;
+
+                // Check -X direction for SAME block type (not just any switch)
+                BlockType checkXMinus = world.getBlockType(blockX - 1, blockY, blockZ);
+                if (checkXMinus != null) {
+                    String xMinusType = checkXMinus.toString();
+                    // Must be exact same switch type (e.g., both "Rail_Switch_Left" or both "Rail_Switch_Right")
+                    if (xMinusType != null && xMinusType.equals(currentBlockType)) {
+                        originX = blockX - 1;
+                    }
+                }
+                // Check -Z direction for SAME block type
+                BlockType checkZMinus = world.getBlockType(blockX, blockY, blockZ - 1);
+                if (checkZMinus != null) {
+                    String zMinusType = checkZMinus.toString();
+                    if (zMinusType != null && zMinusType.equals(currentBlockType)) {
+                        originZ = blockZ - 1;
+                    }
+                }
+                // Also check diagonal -X-Z if we found either (must also match)
+                if (originX != blockX || originZ != blockZ) {
+                    BlockType checkDiag = world.getBlockType(originX, blockY, originZ);
+                    if (checkDiag != null) {
+                        String diagType = checkDiag.toString();
+                        if (diagType == null || !diagType.equals(currentBlockType)) {
+                            // Diagonal doesn't match - reset to current block as origin
+                            originX = blockX;
+                            originZ = blockZ;
+                        }
+                    }
+                }
+                LOGGER.atInfo().log("[SwitchDebug] Block at (%d,%d,%d), origin at (%d,%d,%d): id=%s, isLeft=%s, rotation=%d",
+                    blockX, blockY, blockZ, originX, blockY, originZ, blockId, isSwitchLeft, rotationIndex);
+            }
+
+            // Rotation correction for 2x2 footprint switches.
+            // The engine rotates rail points around (0.5, 0.5) (single-block center),
+            // but 2x2 footprints need rotation around (1.0, 1.0) (footprint center).
+            // This uniform offset compensates for the difference.
+            double switchRotCorrX = 0, switchRotCorrZ = 0;
+            if (isSwitchByName && rotationIndex > 0) {
+                switch (rotationIndex % 4) {
+                    case 1: switchRotCorrZ = 1.0; break;
+                    case 2: switchRotCorrX = 1.0; switchRotCorrZ = 1.0; break;
+                    case 3: switchRotCorrX = 1.0; break;
                 }
             }
 
@@ -832,10 +1329,25 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             }
 
             if (railConfig == null || railConfig.points == null || railConfig.points.length < 2) {
+                if (isSwitchByName) {
+                    LOGGER.atWarning().log("[SwitchDebug] No valid rail config for switch at (%d,%d,%d)", blockX, blockY, blockZ);
+                }
                 return null;
             }
 
             RailPoint[] points = railConfig.points;
+
+            // Debug: log rail points for switch blocks
+            if (isSwitchByName && points.length > 0) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("[SwitchDebug] Rail points (").append(points.length).append("): ");
+                for (int i = 0; i < points.length; i++) {
+                    RailPoint p = points[i];
+                    sb.append(String.format("(%.2f,%.2f,%.2f)", p.point.x, p.point.y, p.point.z));
+                    if (i < points.length - 1) sb.append(" -> ");
+                }
+                LOGGER.atInfo().log(sb.toString());
+            }
             float rawDy = points[points.length - 1].point.y - points[0].point.y;
             boolean isSlope = Math.abs(rawDy) > 0.1f;
 
@@ -852,7 +1364,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 looksLikeCorner = Math.abs(points[0].point.x - points[points.length-1].point.x) > 0.1
                                && Math.abs(points[0].point.z - points[points.length-1].point.z) > 0.1;
 
-                if (looksLikeCorner || isCornerByName) {
+                if (looksLikeCorner || isCornerByName || isSwitchByName) {
                     // Corners: raw points from getRailConfig are ALREADY oriented correctly
                     // for the visual appearance, regardless of rotationIndex. No rotation needed.
                     effectiveRotation = 0;
@@ -970,17 +1482,21 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 // For T-junctions and corners, prefer segments aligned with incoming direction
                 boolean hasIncomingDir = Math.abs(incomingDirX) > 0.01 || Math.abs(incomingDirZ) > 0.01;
 
+                // For multi-block footprints, use origin position; otherwise use blockX/Z
+                int baseX = isSwitchByName ? originX : blockX;
+                int baseZ = isSwitchByName ? originZ : blockZ;
+
                 for (int i = 0; i < points.length - 1; i++) {
-                    // Get rotated coordinates
+                    // Get rotated coordinates (effectiveRotation is 0 for corners/switches)
                     double[] rot1 = rotatePoint(points[i].point.x, points[i].point.z, effectiveRotation);
                     double[] rot2 = rotatePoint(points[i + 1].point.x, points[i + 1].point.z, effectiveRotation);
 
-                    double px1 = blockX + rot1[0];
+                    double px1 = baseX + rot1[0] + switchRotCorrX;
                     double py1 = blockY + points[i].point.y;
-                    double pz1 = blockZ + rot1[1];
-                    double px2 = blockX + rot2[0];
+                    double pz1 = baseZ + rot1[1] + switchRotCorrZ;
+                    double px2 = baseX + rot2[0] + switchRotCorrX;
                     double py2 = blockY + points[i + 1].point.y;
-                    double pz2 = blockZ + rot2[1];
+                    double pz2 = baseZ + rot2[1] + switchRotCorrZ;
 
                     double sX = px2 - px1;
                     double sY = py2 - py1;
@@ -989,10 +1505,19 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
                     if (sLenSq < 0.0001) continue;
 
+                    // Debug: log world positions for switch segments
+                    if (isSwitchByName && i == 0) {
+                        LOGGER.atInfo().log("[SwitchDebug] Segment %d world: (%.2f,%.2f) -> (%.2f,%.2f), base=(%d,%d), rot=%d, entity=(%.2f,%.2f)",
+                            i, px1, pz1, px2, pz2, baseX, baseZ, effectiveRotation, entityPos.x, entityPos.z);
+                    }
+
                     double st = ((entityPos.x - px1) * sX + (entityPos.y - py1) * sY + (entityPos.z - pz1) * sZ) / sLenSq;
 
                     // Skip if cart is past this segment (allow small tolerance)
-                    if (st < -0.2 || st > 1.2) continue;
+                    // For switches, use larger tolerance because rotation can offset entry points
+                    double stMinTolerance = isSwitchByName ? -3.0 : -0.2;
+                    double stMaxTolerance = isSwitchByName ? 3.0 : 1.2;
+                    if (st < stMinTolerance || st > stMaxTolerance) continue;
 
                     st = Math.max(0, Math.min(1, st));
 
@@ -1021,8 +1546,9 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                     }
 
                     // For corners, add penalty for perpendicular segments (but don't skip, as corners need more flexibility)
+                    // Skip this penalty for switch blocks - they have multi-segment curves that need full flexibility
                     double effectiveDistSq = distSq;
-                    if (looksLikeCorner && hasIncomingDir) {
+                    if (looksLikeCorner && hasIncomingDir && !isSwitchByName) {
                         double segLen = Math.sqrt(sX * sX + sZ * sZ);
                         if (segLen > 0.01) {
                             double segNormX = sX / segLen;
@@ -1044,10 +1570,36 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
                         // Calculate direction from THIS segment (important for corners!)
                         double segLen = Math.sqrt(sLenSq);
-                        dirX = (float) (sX / segLen);
-                        dirY = (float) (sY / segLen);
-                        dirZ = (float) (sZ / segLen);
+                        float segDirX = (float) (sX / segLen);
+                        float segDirY = (float) (sY / segLen);
+                        float segDirZ = (float) (sZ / segLen);
+
+                        // For switch blocks: check if cart's incoming direction is opposite to segment
+                        // If so, flip the direction to match cart's movement
+                        if (isSwitchByName && hasIncomingDir) {
+                            double dot = incomingDirX * segDirX + incomingDirZ * segDirZ;
+                            if (dot < 0) {
+                                // Cart is moving opposite to segment direction - flip it
+                                segDirX = -segDirX;
+                                segDirY = -segDirY;
+                                segDirZ = -segDirZ;
+                            }
+                        }
+
+                        dirX = segDirX;
+                        dirY = segDirY;
+                        dirZ = segDirZ;
+
+                        if (isSwitchByName) {
+                            LOGGER.atInfo().log("[SwitchDebug] Segment %d selected: snap=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f), dist=%.3f, st=%.2f",
+                                i, snapX, snapY, snapZ, dirX, dirY, dirZ, Math.sqrt(distSq), st);
+                        }
                     }
+                }
+
+                if (isSwitchByName && !foundValidSnap) {
+                    LOGGER.atWarning().log("[SwitchDebug] NO VALID SNAP at entity pos (%.2f,%.2f,%.2f), incoming dir (%.2f,%.2f)",
+                        entityPos.x, entityPos.y, entityPos.z, incomingDirX, incomingDirZ);
                 }
 
                 // If no valid snap found on segments, check if we should still snap for T-junctions
@@ -1147,8 +1699,19 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                     double[] rotLast = rotatePoint(lastPt.point.x, lastPt.point.z, effectiveRotation);
 
                     // Determine which edge each endpoint is at (using rotated coordinates)
-                    connectedEdges[getEdgeFromPoint((float)rotFirst[0], (float)rotFirst[1])] = true;
-                    connectedEdges[getEdgeFromPoint((float)rotLast[0], (float)rotLast[1])] = true;
+                    if (isSwitchByName) {
+                        // For 2x2 footprint switches, apply rotation correction and scale
+                        // to 0-1 range so getEdgeFromPoint works correctly
+                        float f0x = (float)((rotFirst[0] + switchRotCorrX) / 2.0);
+                        float f0z = (float)((rotFirst[1] + switchRotCorrZ) / 2.0);
+                        float f1x = (float)((rotLast[0] + switchRotCorrX) / 2.0);
+                        float f1z = (float)((rotLast[1] + switchRotCorrZ) / 2.0);
+                        connectedEdges[getEdgeFromPoint(f0x, f0z)] = true;
+                        connectedEdges[getEdgeFromPoint(f1x, f1z)] = true;
+                    } else {
+                        connectedEdges[getEdgeFromPoint((float)rotFirst[0], (float)rotFirst[1])] = true;
+                        connectedEdges[getEdgeFromPoint((float)rotLast[0], (float)rotLast[1])] = true;
+                    }
                 } else {
                     // STRAIGHT RAIL: Determine edges from rail point endpoints
                     // A straight rail connects two opposite edges
@@ -1165,7 +1728,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 }
             }
 
-            return new RailSnap(snapX, snapY, snapZ, dirX, dirY, dirZ, distSq, blockX, blockY, blockZ, isSlope, cornerFlag, tJunctionFlag, isAccelByName, connectedEdges);
+            return new RailSnap(snapX, snapY, snapZ, dirX, dirY, dirZ, distSq, blockX, blockY, blockZ, isSlope, cornerFlag, tJunctionFlag, isAccelByName, isSwitchByName, connectedEdges);
 
         } catch (Exception e) {
             return null;
@@ -1365,10 +1928,11 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         final boolean isCorner;
         final boolean isTJunction;
         final boolean isAccelerator;
+        final boolean isSwitch;
         // Which edges this rail connects to [WEST, EAST, SOUTH, NORTH]
         final boolean[] connectedEdges;
 
-        RailSnap(double x, double y, double z, float dx, float dy, float dz, double distSq, int bx, int by, int bz, boolean isSlope, boolean isCorner, boolean isTJunction, boolean isAccelerator, boolean[] connectedEdges) {
+        RailSnap(double x, double y, double z, float dx, float dy, float dz, double distSq, int bx, int by, int bz, boolean isSlope, boolean isCorner, boolean isTJunction, boolean isAccelerator, boolean isSwitch, boolean[] connectedEdges) {
             this.x = x;
             this.y = y;
             this.z = z;
@@ -1383,6 +1947,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             this.isCorner = isCorner;
             this.isTJunction = isTJunction;
             this.isAccelerator = isAccelerator;
+            this.isSwitch = isSwitch;
             this.connectedEdges = connectedEdges != null ? connectedEdges : new boolean[4];
         }
     }
