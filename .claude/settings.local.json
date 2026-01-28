@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"A:\\\\Downloads\\\\Quick_Farming_by_Krynnx-1.4.1\\\\UsefulMinecarts\" diff HEAD~1 HEAD --name-only)",
+      "Bash(git -C \"A:\\\\Downloads\\\\Quick_Farming_by_Krynnx-1.4.1\\\\UsefulMinecarts\" diff HEAD~1 HEAD -- src/main/resources/manifest.json)",
+      "Bash(git -C \"A:\\\\Downloads\\\\Quick_Farming_by_Krynnx-1.4.1\\\\UsefulMinecarts\" diff HEAD~1 HEAD -- \"src/main/resources/Server/Languages/en-US/items.lang\")",
+      "Bash(git -C \"A:\\\\Downloads\\\\Quick_Farming_by_Krynnx-1.4.1\\\\UsefulMinecarts\" show HEAD~1:src/main/resources/manifest.json)"
+    ]
+  }
+}

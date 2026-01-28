@@ -16,14 +16,20 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.server.core.entity.UUIDComponent;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
+import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
+import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.modules.time.TimeResource;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
@@ -95,8 +101,60 @@ public class ChestCartDeathSystem extends DamageEventSystem {
         );
         if (minecart == null) return;
 
+        LOGGER.atInfo().log("[ChestCartDeath] Minecart received damage: %.2f",
+            damage.getAmount()
+        );
+
         // Skip if no damage
         if (damage.getAmount() <= 0) return;
+
+        // Check if the hitter is a crouching player — if so, skip destruction
+        Damage.Source source = damage.getSource();
+        if (!(source instanceof Damage.EntitySource entitySource)) {
+            return;
+        }
+        Ref<EntityStore> sourceRef = entitySource.getRef();
+        if (!sourceRef.isValid()) {
+            return;
+        }
+        PlayerRef sourcePlayerRef = commandBuffer.getComponent(sourceRef, PlayerRef.getComponentType());
+        if (sourcePlayerRef == null || !sourcePlayerRef.isValid()) {
+            return;
+        }
+
+        LOGGER.atInfo().log("[ChestCartDeath] Damage caused by player %s", sourcePlayerRef.getUsername());
+        MovementStatesComponent moveComp = sourcePlayerRef.getReference().getStore().getComponent(
+                sourcePlayerRef.getReference(), MovementStatesComponent.getComponentType()
+        );
+        if (moveComp != null) {
+            MovementStates states = moveComp.getMovementStates();
+            if (states.crouching) {
+                LOGGER.atInfo().log("[ChestCartDeath] Player is crouching, bumping cart");
+                damage.setAmount(0);
+
+                // Get cart's network ID for bumpCart
+                Ref<EntityStore> cartRef = archetypeChunk.getReferenceTo(index);
+                NetworkId networkId = store.getComponent(cartRef, NetworkId.getComponentType());
+                if (networkId == null) return;
+
+                // Compute direction from player to cart so the cart is pushed away
+                TransformComponent playerTransform = store.getComponent(sourceRef, TransformComponent.getComponentType());
+                if (playerTransform == null) return;
+                TransformComponent cartTransform = archetypeChunk.getComponent(index, TransformComponent.getComponentType());
+                if (cartTransform == null) return;
+
+                Vector3d playerPos = playerTransform.getPosition();
+                Vector3d cartPos = cartTransform.getPosition();
+                double dx = cartPos.x - playerPos.x;
+                double dz = cartPos.z - playerPos.z;
+                float awayYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+
+                MinecartPhysicsSystem.bumpCart(networkId.getId(), awayYaw, 5.0);
+                return;
+            }
+        }
+
+        LOGGER.atInfo().log("[ChestCartDeath] Player is not crouching, proceeding with damage");
 
         // Get current time for reset check
         TimeResource timeResource = (TimeResource) commandBuffer.getResource(TimeResource.getResourceType());
@@ -117,11 +175,10 @@ public class ChestCartDeathSystem extends DamageEventSystem {
         // So we check if current + 1 >= 3
         if (currentHits + 1 >= NUMBER_OF_HITS_TO_DESTROY) {
             // Cart is about to be destroyed - drop inventory!
-            Ref<EntityStore> ref = archetypeChunk.getReferenceTo(index);
-            if (ref == null) return;
+            Ref<EntityStore> cartRef = archetypeChunk.getReferenceTo(index);
 
             // Get UUID for inventory lookup
-            UUIDComponent uuidComp = store.getComponent(ref, UUIDComponent.getComponentType());
+            UUIDComponent uuidComp = store.getComponent(cartRef, UUIDComponent.getComponentType());
             if (uuidComp == null) return;
             UUID cartUuid = uuidComp.getUuid();
 

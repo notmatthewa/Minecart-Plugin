@@ -37,6 +37,19 @@
           "Type": "SpawnMinecart",
           "Model": "UsefulMinecarts_Chest_Minecart",
           "CartInteractions": {
+            "Primary": {
+              "Interactions": [
+                {
+                  "$Comment": "Left click = ride (using custom server-authoritative mount)",
+                  "Type": "UsefulMinecartsCustomMount",
+                  "AttachmentOffset": {
+                      "X": 0,
+                      "Y": 1,
+                      "Z": 0.3
+                  }
+                }
+              ]
+            },
             "Use": {
               "Interactions": [
                 {
@@ -73,8 +86,8 @@
   },
   "Set": "Furniture_Jungle",
   "PlayerAnimationsId": "Item",
-  "Model": "Items/Vehicles/Rail_Kart.blockymodel",
-  "Texture": "Items/Vehicles/Rail_Kart_Texture.png",
+  "Model": "Items/Vehicles/UsefulMinecarts_ChestMinecart.blockymodel",
+  "Texture": "Items/Vehicles/UsefulMinecarts_ChestMinecart_Texture.png",
   "IconProperties": {
     "Scale": 0.55,
     "Translation": [

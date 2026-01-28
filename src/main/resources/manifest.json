@@ -12,10 +12,10 @@
     "ServerVersion": "*",
     "Main": "com.usefulminecarts.UsefulMinecartsPlugin",
     "Dependencies": {
-        "Hytale:InteractionModule": "*"
+        
     },
     "OptionalDependencies": {
-        
+        "Hytale:InteractionModule": "*"
     },
     "LoadBefore": {
         

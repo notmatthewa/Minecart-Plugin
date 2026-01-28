@@ -61,6 +61,39 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
     private int tickCount = 0;
 
+    /**
+     * Give a minecart a push in a direction derived from the player's yaw.
+     * Called by MinecartBumpInteraction when a player crouch-clicks a cart.
+     *
+     * @param entityId  The cart's network entity ID
+     * @param playerYaw The player's facing yaw in degrees
+     * @param strength  Push strength in blocks/s
+     */
+    public static void bumpCart(int entityId, float playerYaw, double strength) {
+        LOGGER.atInfo().log("[MinecartPhysics] bumpCart called: entityId=%d, yaw=%.1f, strength=%.1f", entityId, playerYaw, strength);
+
+        // Convert yaw to world direction (yaw 0 = +Z/south, 90 = -X/west, etc.)
+        double yawRad = Math.toRadians(playerYaw);
+        double dirX = -Math.sin(yawRad);
+        double dirZ = Math.cos(yawRad);
+
+        // Normalize
+        double len = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        if (len > 0.001) {
+            dirX /= len;
+            dirZ /= len;
+        }
+
+        LOGGER.atInfo().log("[MinecartPhysics] Bump direction: dirX=%.3f, dirZ=%.3f", dirX, dirZ);
+
+        // Set world direction and velocity
+        minecartWorldDirection.put(entityId, new double[]{dirX, dirZ});
+        minecartVelocities.put(entityId, strength);
+
+        double checkVel = minecartVelocities.getOrDefault(entityId, -1.0);
+        LOGGER.atInfo().log("[MinecartPhysics] Velocity after bump: %.3f (expected %.3f)", checkVel, strength);
+    }
+
     // Helper: Get entry edge from world movement direction
     // Entry edge = the edge of the block the cart enters THROUGH (where it came from)
     private int getEntryEdge(double worldMoveX, double worldMoveZ) {
@@ -1301,8 +1334,8 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                         }
                     }
                 }
-                LOGGER.atInfo().log("[SwitchDebug] Block at (%d,%d,%d), origin at (%d,%d,%d): id=%s, isLeft=%s, rotation=%d",
-                    blockX, blockY, blockZ, originX, blockY, originZ, blockId, isSwitchLeft, rotationIndex);
+//                LOGGER.atInfo().log("[SwitchDebug] Block at (%d,%d,%d), origin at (%d,%d,%d): id=%s, isLeft=%s, rotation=%d",
+//                    blockX, blockY, blockZ, originX, blockY, originZ, blockId, isSwitchLeft, rotationIndex);
             }
 
             // Rotation correction for 2x2 footprint switches.
@@ -1329,25 +1362,25 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             }
 
             if (railConfig == null || railConfig.points == null || railConfig.points.length < 2) {
-                if (isSwitchByName) {
-                    LOGGER.atWarning().log("[SwitchDebug] No valid rail config for switch at (%d,%d,%d)", blockX, blockY, blockZ);
-                }
+//                if (isSwitchByName) {
+//                    LOGGER.atWarning().log("[SwitchDebug] No valid rail config for switch at (%d,%d,%d)", blockX, blockY, blockZ);
+//                }
                 return null;
             }
 
             RailPoint[] points = railConfig.points;
 
             // Debug: log rail points for switch blocks
-            if (isSwitchByName && points.length > 0) {
-                StringBuilder sb = new StringBuilder();
-                sb.append("[SwitchDebug] Rail points (").append(points.length).append("): ");
-                for (int i = 0; i < points.length; i++) {
-                    RailPoint p = points[i];
-                    sb.append(String.format("(%.2f,%.2f,%.2f)", p.point.x, p.point.y, p.point.z));
-                    if (i < points.length - 1) sb.append(" -> ");
-                }
-                LOGGER.atInfo().log(sb.toString());
-            }
+//            if (isSwitchByName && points.length > 0) {
+//                StringBuilder sb = new StringBuilder();
+//                sb.append("[SwitchDebug] Rail points (").append(points.length).append("): ");
+//                for (int i = 0; i < points.length; i++) {
+//                    RailPoint p = points[i];
+//                    sb.append(String.format("(%.2f,%.2f,%.2f)", p.point.x, p.point.y, p.point.z));
+//                    if (i < points.length - 1) sb.append(" -> ");
+//                }
+//                LOGGER.atInfo().log(sb.toString());
+//            }
             float rawDy = points[points.length - 1].point.y - points[0].point.y;
             boolean isSlope = Math.abs(rawDy) > 0.1f;
 
@@ -1507,8 +1540,8 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
                     // Debug: log world positions for switch segments
                     if (isSwitchByName && i == 0) {
-                        LOGGER.atInfo().log("[SwitchDebug] Segment %d world: (%.2f,%.2f) -> (%.2f,%.2f), base=(%d,%d), rot=%d, entity=(%.2f,%.2f)",
-                            i, px1, pz1, px2, pz2, baseX, baseZ, effectiveRotation, entityPos.x, entityPos.z);
+//                        LOGGER.atInfo().log("[SwitchDebug] Segment %d world: (%.2f,%.2f) -> (%.2f,%.2f), base=(%d,%d), rot=%d, entity=(%.2f,%.2f)",
+//                            i, px1, pz1, px2, pz2, baseX, baseZ, effectiveRotation, entityPos.x, entityPos.z);
                     }
 
                     double st = ((entityPos.x - px1) * sX + (entityPos.y - py1) * sY + (entityPos.z - pz1) * sZ) / sLenSq;
@@ -1591,15 +1624,15 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                         dirZ = segDirZ;
 
                         if (isSwitchByName) {
-                            LOGGER.atInfo().log("[SwitchDebug] Segment %d selected: snap=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f), dist=%.3f, st=%.2f",
-                                i, snapX, snapY, snapZ, dirX, dirY, dirZ, Math.sqrt(distSq), st);
+//                            LOGGER.atInfo().log("[SwitchDebug] Segment %d selected: snap=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f), dist=%.3f, st=%.2f",
+//                                i, snapX, snapY, snapZ, dirX, dirY, dirZ, Math.sqrt(distSq), st);
                         }
                     }
                 }
 
                 if (isSwitchByName && !foundValidSnap) {
-                    LOGGER.atWarning().log("[SwitchDebug] NO VALID SNAP at entity pos (%.2f,%.2f,%.2f), incoming dir (%.2f,%.2f)",
-                        entityPos.x, entityPos.y, entityPos.z, incomingDirX, incomingDirZ);
+//                    LOGGER.atWarning().log("[SwitchDebug] NO VALID SNAP at entity pos (%.2f,%.2f,%.2f), incoming dir (%.2f,%.2f)",
+//                        entityPos.x, entityPos.y, entityPos.z, incomingDirX, incomingDirZ);
                 }
 
                 // If no valid snap found on segments, check if we should still snap for T-junctions
