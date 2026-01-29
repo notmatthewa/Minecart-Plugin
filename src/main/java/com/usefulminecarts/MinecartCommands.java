@@ -43,6 +43,7 @@ public class MinecartCommands extends AbstractCommand {
         this.addSubCommand(new UphillDragCommand());
         this.addSubCommand(new InitialPushCommand());
         this.addSubCommand(new RotationCommand());
+        this.addSubCommand(new RiderVelCommand());
     }
 
     @Nullable
@@ -63,6 +64,7 @@ public class MinecartCommands extends AbstractCommand {
         context.sendMessage(Message.raw("/mc uphilldrag [val] - Uphill resistance"));
         context.sendMessage(Message.raw("/mc initialpush [val] - Starting velocity"));
         context.sendMessage(Message.raw("/mc rotation [val] - Rotation smoothing"));
+        context.sendMessage(Message.raw("/mc ridervel [val] - Rider gravity counter"));
         return CompletableFuture.completedFuture(null);
     }
 
@@ -381,6 +383,40 @@ public class MinecartCommands extends AbstractCommand {
                         context.sendMessage(Message.raw("Rotation smoothing set to " + value));
                     } else {
                         context.sendMessage(Message.raw("Invalid value. Must be between 0.01 and 1.0."));
+                    }
+                } catch (NumberFormatException e) {
+                    context.sendMessage(Message.raw("Invalid number: " + valueStr));
+                }
+            }
+            return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    public static class RiderVelCommand extends AbstractCommand {
+        private final OptionalArg<String> valueArg;
+
+        public RiderVelCommand() {
+            super("ridervel", "Set rider gravity counter velocity (-10 to 10)");
+            this.addAliases("rv", "ridergrav");
+            this.valueArg = this.withOptionalArg("value", "velocity value", ArgTypes.STRING);
+        }
+
+        @Nullable
+        @Override
+        protected CompletableFuture<Void> execute(@Nonnull CommandContext context) {
+            String valueStr = this.valueArg.get(context);
+            if (valueStr == null) {
+                context.sendMessage(Message.raw("Current rider gravity counter: " + CustomMinecartRidingSystem.getRiderGravityCounterVel()));
+                context.sendMessage(Message.raw("Usage: /mc ridervel <-10 to 10>"));
+                context.sendMessage(Message.raw("Positive = upward push, Negative = downward, 0 = none"));
+            } else {
+                try {
+                    float value = Float.parseFloat(valueStr);
+                    if (value >= -10f && value <= 10f) {
+                        CustomMinecartRidingSystem.setRiderGravityCounterVel(value);
+                        context.sendMessage(Message.raw("Rider gravity counter set to " + value));
+                    } else {
+                        context.sendMessage(Message.raw("Invalid value. Must be between -10 and 10."));
                     }
                 } catch (NumberFormatException e) {
                     context.sendMessage(Message.raw("Invalid number: " + valueStr));

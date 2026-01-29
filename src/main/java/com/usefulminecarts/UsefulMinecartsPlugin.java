@@ -28,6 +28,23 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
 
     public static UsefulMinecartsPlugin INSTANCE;
 
+    /**
+     * Flag to indicate the plugin is shutting down.
+     * Systems should check this and skip processing to avoid race conditions
+     * with the server's player removal sequence.
+     */
+    private static volatile boolean shuttingDown = false;
+
+    private MountMovementPacketFilter mountMovementFilter;
+
+    /**
+     * Check if the plugin is shutting down.
+     * Systems should skip processing if this returns true.
+     */
+    public static boolean isShuttingDown() {
+        return shuttingDown;
+    }
+
     public UsefulMinecartsPlugin(@Nonnull JavaPluginInit init) {
         super(init);
         INSTANCE = this;
@@ -61,15 +78,18 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         // Initialize storage (just sets up directory, no loading)
         ChestMinecartStorage.init();
 
-        // Register input interceptor (runs BEFORE HandleMountInput to clear movement queue)
-        this.getEntityStoreRegistry().registerSystem(new MinecartInputInterceptor());
+        // Register MountMovement packet filter BEFORE ECS systems
+        // This blocks MountMovement packets for minecarts at the network level,
+        // preventing the client from overriding server-calculated positions
+        mountMovementFilter = new MountMovementPacketFilter();
+        mountMovementFilter.register();
 
-        // Register the physics system (runs BEFORE HandleMountInput, calculates positions)
+        // Register the input blocker FIRST - clears movement queue before HandleMountInput
+        // can apply client-predicted positions to the cart entity
+        this.getEntityStoreRegistry().registerSystem(new MinecartMountInputBlocker());
+
+        // Register the physics system (calculates server-authoritative positions)
         this.getEntityStoreRegistry().registerSystem(new MinecartPhysicsSystem());
-
-        // Register the rail snap system (runs AFTER HandleMountInput to restore physics positions)
-        // This restores the position calculated by MinecartPhysicsSystem after client overrides it
-        this.getEntityStoreRegistry().registerSystem(new MinecartRailSnapSystem());
 
         // Register the rail debug system for /mc railinfo command
         this.getEntityStoreRegistry().registerSystem(new RailDebugSystem());
@@ -92,8 +112,20 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
 
     @Override
     protected void shutdown() {
-        // Save all inventories and config before shutdown
+        // Set shutdown flag FIRST to stop all systems from processing
+        shuttingDown = true;
         getLogger().atInfo().log("UsefulMinecarts shutting down...");
+
+        // Clear all rider tracking data to prevent systems from accessing stale references
+        // This must happen before the server starts removing player entities
+        getLogger().atInfo().log("[UsefulMinecarts] Clearing rider tracking data...");
+        MinecartRiderTracker.clear();
+        CustomMinecartRidingSystem.clearAllTracking();
+        MinecartMountInputBlocker.clearAll();
+
+        if (mountMovementFilter != null) {
+            mountMovementFilter.unregister();
+        }
         ChestMinecartStorage.saveToFile();
         MinecartConfig.save();
         super.shutdown();

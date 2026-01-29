@@ -53,4 +53,20 @@ public class MinecartRiderTracker {
     public static void clear() {
         ridersByCart.clear();
     }
+
+    /**
+     * Get all cart entity IDs that have riders tracked.
+     * Used for cleanup on shutdown.
+     */
+    public static java.util.Set<Integer> getAllCartIds() {
+        return new java.util.HashSet<>(ridersByCart.keySet());
+    }
+
+    /**
+     * Get the underlying map for iteration during cleanup.
+     * Returns a snapshot copy to avoid concurrent modification.
+     */
+    public static Map<Integer, Ref<EntityStore>> getAllRiders() {
+        return new ConcurrentHashMap<>(ridersByCart);
+    }
 }

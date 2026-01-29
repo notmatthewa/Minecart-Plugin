@@ -1,6 +1,5 @@
 package com.usefulminecarts;
 
-import com.hypixel.hytale.builtin.mounts.MountedComponent;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.CommandBuffer;
@@ -10,15 +9,14 @@ import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.protocol.InteractionState;
 import com.hypixel.hytale.protocol.InteractionType;
-import com.hypixel.hytale.protocol.MountController;
 import com.hypixel.hytale.server.core.codec.ProtocolCodecs;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
-import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInstantInteraction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.io.PacketHandler;
 
 import javax.annotation.Nonnull;
 
@@ -51,7 +49,7 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
     ).add()
     .build();
 
-    private final Vector3f attachmentOffset = new Vector3f(0, 1, 0.3f);
+    private final Vector3f attachmentOffset = new Vector3f(0, 1.5f, 0.3f);
 
     public CustomMinecartMount() {
         super();
@@ -78,35 +76,36 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
             CommandBuffer<EntityStore> commandBuffer = context.getCommandBuffer();
             LOGGER.atInfo().log("[CustomMinecartMount] Player entity valid: %s", playerEntity != null && playerEntity.isValid());
 
-            // Check if player is already riding (using our custom component or vanilla)
+            // Check if player is already riding
             CustomMinecartRiderComponent existingRider = null;
-            MountedComponent existingMount = null;
             try {
                 existingRider = commandBuffer.getComponent(playerEntity, CustomMinecartRiderComponent.getComponentType());
-                existingMount = commandBuffer.getComponent(playerEntity, MountedComponent.getComponentType());
             } catch (Exception e) {
                 LOGGER.atWarning().log("[CustomMinecartMount] Error checking existing components: %s", e.getMessage());
             }
 
-            LOGGER.atInfo().log("[CustomMinecartMount] Existing rider: %s, existing mount: %s",
-                existingRider != null, existingMount != null);
+            LOGGER.atInfo().log("[CustomMinecartMount] Existing rider: %s", existingRider != null);
 
-            if (existingRider != null || existingMount != null) {
+            if (existingRider != null) {
                 // Already riding - dismount
                 try {
-                    int cartId = -1;
-                    if (existingRider != null) {
-                        cartId = existingRider.getMinecartEntityId();
-                        LOGGER.atInfo().log("[CustomMinecartMount] Dismounting from cart %d", cartId);
-                        commandBuffer.removeComponent(playerEntity, CustomMinecartRiderComponent.getComponentType());
-                        MinecartRiderTracker.removeRider(cartId);
-                        CustomMinecartRidingSystem.removeCart(cartId);
+                    int cartId = existingRider.getMinecartEntityId();
+                    LOGGER.atInfo().log("[CustomMinecartMount] Dismounting from cart %d", cartId);
+
+                    // Restore player's movement settings before dismounting
+                    PacketHandler handler = MountMovementPacketFilter.getHandlerForCart(cartId);
+                    if (handler != null) {
+                        CustomMinecartRidingSystem.restoreMovementSettings(cartId, commandBuffer, playerEntity, handler);
                     }
-                    if (existingMount != null) {
-                        // Removing MountedComponent handles dismount via vanilla system
-                        commandBuffer.removeComponent(playerEntity, MountedComponent.getComponentType());
-                        LOGGER.atInfo().log("[CustomMinecartMount] Removed MountedComponent");
-                    }
+
+                    commandBuffer.removeComponent(playerEntity, CustomMinecartRiderComponent.getComponentType());
+                    MinecartRiderTracker.removeRider(cartId);
+                    CustomMinecartRidingSystem.removeCart(cartId);
+                    MinecartMountInputBlocker.clearInput(cartId);
+                    MountMovementPacketFilter.onDismount(cartId);
+
+                    // NOTE: Do NOT modify MovementStates here - we don't set them during riding,
+                    // and modifying them can cause client crashes
                 } catch (Exception e) {
                     LOGGER.atSevere().log("[CustomMinecartMount] Error during dismount: %s", e.getMessage());
                 }
@@ -124,27 +123,6 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
             }
             int cartEntityId = cartNetworkId.getId();
             LOGGER.atInfo().log("[CustomMinecartMount] Cart network ID: %d", cartEntityId);
-
-            // CRITICAL: Add MovementStatesComponent to the cart if it doesn't have one
-            // This prevents NPE in GamePacketHandler when client sends mount movement packets
-            // The NPC-style mount causes client to send movement to the cart directly,
-            // and the packet handler expects MovementStatesComponent to exist
-            try {
-                MovementStatesComponent existingMoveComp = commandBuffer.getComponent(
-                    targetEntity, MovementStatesComponent.getComponentType()
-                );
-                if (existingMoveComp == null) {
-                    // Create a new MovementStatesComponent with default (stationary) states
-                    MovementStatesComponent moveComp = new MovementStatesComponent();
-                    commandBuffer.addComponent(targetEntity, MovementStatesComponent.getComponentType(), moveComp);
-                    LOGGER.atInfo().log("[CustomMinecartMount] Added MovementStatesComponent to cart %d", cartEntityId);
-                } else {
-                    LOGGER.atInfo().log("[CustomMinecartMount] Cart %d already has MovementStatesComponent", cartEntityId);
-                }
-            } catch (Exception e) {
-                LOGGER.atWarning().log("[CustomMinecartMount] Could not add MovementStatesComponent to cart: %s", e.getMessage());
-                // Continue anyway - the component might already exist or be auto-added
-            }
 
             if (MinecartRiderTracker.hasRider(cartEntityId)) {
                 LOGGER.atInfo().log("[CustomMinecartMount] Cart %d already has a rider", cartEntityId);
@@ -178,24 +156,16 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
                 return;
             }
 
-            // Use MountedComponent with Minecart controller for visual attachment
-            // The client will try to control the cart, but:
-            // 1. MinecartInputInterceptor clears the movement queue (extracts W/S first)
-            // 2. HandleMountInput gets empty queue, does nothing
-            // 3. MinecartPhysicsSystem calculates server position
-            // 4. MinecartRailSnapSystem restores server position after any client interference
-            // 5. Entity tracking system replicates the corrected position to client
-            try {
-                MountedComponent mountComp = new MountedComponent(
-                    targetEntity,
-                    attachmentOffset,
-                    MountController.Minecart
-                );
-                commandBuffer.addComponent(playerEntity, MountedComponent.getComponentType(), mountComp);
-                LOGGER.atInfo().log("[CustomMinecartMount] Added MountedComponent with Minecart controller");
-            } catch (Exception e) {
-                LOGGER.atWarning().log("[CustomMinecartMount] Failed to add MountedComponent: %s", e.getMessage());
-            }
+            // NOTE: We intentionally do NOT add MountedComponent.
+            // MountedComponent gives the CLIENT authority over the mount's position,
+            // causing it to ignore server physics. Instead we use our packet interceptor
+            // + ChangeVelocity approach to keep the player on the cart server-authoritatively.
+
+            // Notify packet interceptor about the new mount (for input detection)
+            MountMovementPacketFilter.onMount(cartEntityId);
+
+            // Start grace period for input blocker (ignore position-based input briefly)
+            MinecartMountInputBlocker.onMount(cartEntityId);
 
             // Track the rider in our tracker
             try {
@@ -205,20 +175,13 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
                 LOGGER.atSevere().log("[CustomMinecartMount] Failed to track rider: %s", e.getMessage());
             }
 
-            // Store cart position for the riding system
+            // Store cart position for the riding system and mark as just mounted
             try {
                 CustomMinecartRidingSystem.updateCartPosition(cartEntityId, minecartPos.x, minecartPos.y, minecartPos.z);
-                LOGGER.atInfo().log("[CustomMinecartMount] Updated cart position in riding system");
+                CustomMinecartRidingSystem.markJustMounted(cartEntityId);
+                LOGGER.atInfo().log("[CustomMinecartMount] Updated cart position and marked as just mounted");
             } catch (Exception e) {
                 LOGGER.atSevere().log("[CustomMinecartMount] Failed to update cart position: %s", e.getMessage());
-            }
-
-            // Store position for physics system
-            try {
-                MinecartPositionTracker.trackedPositions.put(cartEntityId, new Vector3d(minecartPos.x, minecartPos.y, minecartPos.z));
-                LOGGER.atInfo().log("[CustomMinecartMount] Stored position in MinecartPositionTracker");
-            } catch (Exception e) {
-                LOGGER.atSevere().log("[CustomMinecartMount] Failed to store position: %s", e.getMessage());
             }
 
             // Teleport player to the cart position + offset
@@ -228,9 +191,7 @@ public class CustomMinecartMount extends SimpleInstantInteraction {
                     double newX = minecartPos.x + attachmentOffset.x;
                     double newY = minecartPos.y + attachmentOffset.y;
                     double newZ = minecartPos.z + attachmentOffset.z;
-                    playerTransform.getPosition().x = newX;
-                    playerTransform.getPosition().y = newY;
-                    playerTransform.getPosition().z = newZ;
+                    playerTransform.setPosition(new Vector3d(newX, newY, newZ));
                     LOGGER.atInfo().log("[CustomMinecartMount] Teleported player to (%.2f, %.2f, %.2f)", newX, newY, newZ);
                 } else {
                     LOGGER.atWarning().log("[CustomMinecartMount] Player has no TransformComponent!");

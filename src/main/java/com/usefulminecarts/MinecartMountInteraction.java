@@ -97,15 +97,6 @@ public class MinecartMountInteraction extends SimpleInstantInteraction {
             LOGGER.atInfo().log("[MinecartMount] Saving minecart position: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
         }
 
-        // Store the position for snap system
-        if (minecartPos != null) {
-            NetworkId networkId = commandBuffer.getComponent(targetEntity, NetworkId.getComponentType());
-            if (networkId != null) {
-                MinecartPositionTracker.trackedPositions.put(networkId.getId(), minecartPos);
-                LOGGER.atInfo().log("[MinecartMount] Stored position for entity %d", networkId.getId());
-            }
-        }
-
         // Add MountedComponent to player with Minecart controller for proper visual mounting
         // Note: We track our own rider state separately to handle physics
         commandBuffer.addComponent(

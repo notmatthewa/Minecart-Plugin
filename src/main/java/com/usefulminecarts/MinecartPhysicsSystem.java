@@ -18,11 +18,9 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
-import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.protocol.RailConfig;
 import com.hypixel.hytale.protocol.RailPoint;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
-import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -310,8 +308,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
     private final Query<EntityStore> query;
 
     // Run BEFORE HandleMountInput so our physics position is calculated first
-    // Then HandleMountInput will overwrite with client position
-    // Then MinecartRailSnapSystem will restore to our physics position
+    // MountMovement packets are blocked by MountMovementPacketFilter at the network level
     @Nonnull
     private final Set<Dependency<EntityStore>> dependencies;
 
@@ -344,7 +341,19 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             @Nonnull CommandBuffer<EntityStore> commandBuffer
     ) {
         tickCount++;
+
+        // Skip processing if plugin is shutting down to avoid race conditions
+        if (UsefulMinecartsPlugin.isShuttingDown()) {
+            return;
+        }
+
         Ref<EntityStore> minecartRef = archetypeChunk.getReferenceTo(index);
+
+        // Safety check: verify entity reference is still valid (prevents crashes during shutdown)
+        if (minecartRef == null || !minecartRef.isValid()) {
+            return;
+        }
+
         boolean shouldLog = (tickCount % 4 == 0);
 
         NetworkId networkId = store.getComponent(minecartRef, NetworkId.getComponentType());
@@ -372,54 +381,48 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         }
 
         // Get rider input if we have a rider
-        // With NPC-style mount, the client sends movement states to the CART, not the player
-        // So we check BOTH the cart's MovementStatesComponent AND the rider's
+        // Input from MinecartMountInputBlocker is relative to player's look direction:
+        // +1 = W key (player wants to move in their look direction)
+        // -1 = S key (player wants to move opposite their look direction)
+        // We convert this to cart-relative forward/backward based on player facing vs cart facing
         if (isMounted) {
-            // First, check the cart's MovementStatesComponent (NPC-style mount sends here)
-            MovementStatesComponent cartMoveComp = store.getComponent(minecartRef, MovementStatesComponent.getComponentType());
-            if (cartMoveComp != null) {
-                MovementStates cartStates = cartMoveComp.getMovementStates();
-                if (cartStates != null) {
-                    // W key = walking forward, S key = crouching (for backward)
-                    if (cartStates.walking || cartStates.running || cartStates.sprinting) {
-                        riderWantsForward = true;
-                        if (shouldLog) {
-                            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from cart MovementStates - FORWARD (walking=%b, running=%b, sprinting=%b)",
-                                entityId, cartStates.walking, cartStates.running, cartStates.sprinting);
-                        }
-                    }
-                    if (cartStates.crouching) {
-                        riderWantsBackward = true;
-                        if (shouldLog) {
-                            LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from cart MovementStates - BACKWARD (crouching=%b)",
-                                entityId, cartStates.crouching);
-                        }
-                    }
-                }
-            }
+            int blockerInput = MinecartMountInputBlocker.consumeRiderInput(entityId);
 
-            // Also check the rider's MovementStatesComponent (vanilla mount may use this)
-            if (riderRef != null && riderRef.isValid()) {
-                MovementStatesComponent riderMoveComp = store.getComponent(riderRef, MovementStatesComponent.getComponentType());
-                if (riderMoveComp != null) {
-                    MovementStates states = riderMoveComp.getMovementStates();
-                    if (states != null) {
-                        // W key = walking forward, S key = crouching (we use this for backward)
-                        if (states.walking || states.running || states.sprinting) {
-                            if (!riderWantsForward && shouldLog) {
-                                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from rider MovementStates - FORWARD",
-                                    entityId);
-                            }
-                            riderWantsForward = true;
-                        }
-                        if (states.crouching) {
-                            if (!riderWantsBackward && shouldLog) {
-                                LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Input from rider MovementStates - BACKWARD",
-                                    entityId);
-                            }
-                            riderWantsBackward = true;
-                        }
-                    }
+            if (blockerInput != 0) {
+                // Get player's look direction
+                float[] clientRot = MinecartMountInputBlocker.getClientRotation(entityId);
+                float playerYaw = (clientRot != null) ? clientRot[1] : 0f; // headYaw
+
+                // Get cart's current facing yaw
+                float cartYaw = minecartFacingYaw.getOrDefault(entityId, 0f);
+
+                // Calculate if player is facing same direction as cart or opposite
+                // Player look direction
+                double playerLookX = -Math.sin(playerYaw);
+                double playerLookZ = Math.cos(playerYaw);
+
+                // Cart facing direction
+                double cartFaceX = -Math.sin(cartYaw);
+                double cartFaceZ = Math.cos(cartYaw);
+
+                // Dot product: >0 = facing same direction, <0 = facing opposite
+                double facingDot = playerLookX * cartFaceX + playerLookZ * cartFaceZ;
+                boolean facingSameDirection = facingDot > 0;
+
+                // Convert player's W/S to cart forward/backward
+                if (facingSameDirection) {
+                    // Player faces same as cart: W = forward, S = backward
+                    if (blockerInput > 0) riderWantsForward = true;
+                    if (blockerInput < 0) riderWantsBackward = true;
+                } else {
+                    // Player faces opposite to cart: W = backward, S = forward
+                    if (blockerInput > 0) riderWantsBackward = true;
+                    if (blockerInput < 0) riderWantsForward = true;
+                }
+
+                if (shouldLog) {
+                    LOGGER.atInfo().log("[ClientMovementDebug] INPUT cart %d: blockerInput=%d, playerYaw=%.2f, cartYaw=%.2f, facingDot=%.2f, samedir=%b, forward=%b, backward=%b",
+                        entityId, blockerInput, playerYaw, cartYaw, facingDot, facingSameDirection, riderWantsForward, riderWantsBackward);
                 }
             }
         }
@@ -429,6 +432,14 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
         Vector3d position = transform.getPosition();
         Vector3f rotation = transform.getRotation();
+
+        // [ClientMovementDebug] Log the position at the START of physics tick
+        // This tells us if something overwrote the position between ticks
+        if (shouldLog && isMounted) {
+            LOGGER.atInfo().log("[ClientMovementDebug] PHYSICS_START cart %d: pos=(%.2f, %.2f, %.2f), mounted=%b, forward=%b, backward=%b, packetMomentum=%d",
+                entityId, position.x, position.y, position.z, isMounted, riderWantsForward, riderWantsBackward,
+                MountMovementPacketFilter.getMomentumDirection(entityId));
+        }
 
         World world = store.getExternalData().getWorld();
         if (world == null) return;
@@ -459,11 +470,17 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             velocity = MinecartConfig.getInitialPush();
         }
 
-        // If stationary on flat rail, stay put
-        if (Math.abs(velocity) < MinecartConfig.getMinSpeed() && !snap.isSlope) {
-            transform.getPosition().x = snap.x;
-            transform.getPosition().y = snap.y;
-            transform.getPosition().z = snap.z;
+        // If stationary on flat rail with no rider input, stay put
+        if (Math.abs(velocity) < MinecartConfig.getMinSpeed() && !snap.isSlope
+                && !(isMounted && (riderWantsForward || riderWantsBackward))) {
+            transform.setPosition(new Vector3d(snap.x, snap.y, snap.z));
+            MountMovementPacketFilter.updatePhysicsState(entityId, snap.x, snap.y, snap.z,
+                rotation.getYaw(), rotation.getPitch(), 0f);
+            if (shouldLog && isMounted) {
+                Vector3d afterPos = transform.getPosition();
+                LOGGER.atInfo().log("[ClientMovementDebug] PHYSICS_STATIONARY cart %d: setPosition called with (%.2f, %.2f, %.2f), getPosition after=(%.2f, %.2f, %.2f)",
+                    entityId, snap.x, snap.y, snap.z, afterPos.x, afterPos.y, afterPos.z);
+            }
             return;
         }
 
@@ -1096,33 +1113,48 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
             rotation.setPitch(targetPitch);
         }
 
-        // Update cart position
-        transform.getPosition().x = newX;
-        transform.getPosition().y = newY;
-        transform.getPosition().z = newZ;
+        // Update cart position - use setPosition() to mark transform dirty for entity replication
+        Vector3d beforePos = transform.getPosition();
+        double beforeX = beforePos.x, beforeY = beforePos.y, beforeZ = beforePos.z;
+        transform.setPosition(new Vector3d(newX, newY, newZ));
+        Vector3d afterPos = transform.getPosition();
 
-        // Store physics position for MinecartRailSnapSystem to restore after HandleMountInput
-        // This is the key to server-authoritative physics - we calculate first, then restore after client overrides
-        MinecartPositionTracker.trackedPositions.put(entityId, new Vector3d(newX, newY, newZ));
+        if (shouldLog && isMounted) {
+            LOGGER.atInfo().log("[ClientMovementDebug] PHYSICS_END cart %d: before=(%.2f, %.2f, %.2f) -> setPosition(%.2f, %.2f, %.2f) -> getPosition=(%.2f, %.2f, %.2f), sameObj=%b",
+                entityId, beforeX, beforeY, beforeZ, newX, newY, newZ,
+                afterPos.x, afterPos.y, afterPos.z, beforePos == afterPos);
+        }
+
+        // Store physics state for the packet filter to inject into MountMovement packets
+        MountMovementPacketFilter.updatePhysicsState(entityId, newX, newY, newZ,
+            rotation.getYaw(), rotation.getPitch(), 0f);
 
         // Update position for CustomMinecartRidingSystem (for our custom rider positioning)
         CustomMinecartRidingSystem.updateCartPosition(entityId, newX, newY, newZ);
 
-        // Clean up rider tracking if rider dismounted (check both vanilla and custom components)
+        // NOTE: We tried teleporting the CART entity to force rotation correction,
+        // but this caused the mounted player's camera to drift (cart rotation was
+        // being applied to player view). Instead, rely on MountMovementPacketFilter
+        // to rewrite incoming packet rotation to our physics rotation.
+
+        // Clean up rider tracking if rider dismounted
         if (MinecartRiderTracker.hasRider(entityId)) {
             Ref<EntityStore> trackedRider = MinecartRiderTracker.getRider(entityId);
             if (trackedRider == null || !trackedRider.isValid()) {
                 // Rider ref is invalid, clean up
                 MinecartRiderTracker.removeRider(entityId);
                 CustomMinecartRidingSystem.removeCart(entityId);
+                MinecartMountInputBlocker.clearInput(entityId);
+                MountMovementPacketFilter.onDismount(entityId);
             } else {
-                // Check if rider still has our custom component OR vanilla MountedComponent
+                // Check if rider still has our custom component or vanilla mount
                 CustomMinecartRiderComponent customRider = store.getComponent(trackedRider, CustomMinecartRiderComponent.getComponentType());
                 MountedComponent vanillaRider = store.getComponent(trackedRider, MountedComponent.getComponentType());
                 if (customRider == null && vanillaRider == null) {
-                    // Rider dismounted from both systems
                     MinecartRiderTracker.removeRider(entityId);
                     CustomMinecartRidingSystem.removeCart(entityId);
+                    MinecartMountInputBlocker.clearInput(entityId);
+                    MountMovementPacketFilter.onDismount(entityId);
                     LOGGER.atInfo().log("[MinecartPhysics] Rider dismounted from cart %d", entityId);
                 }
             }
