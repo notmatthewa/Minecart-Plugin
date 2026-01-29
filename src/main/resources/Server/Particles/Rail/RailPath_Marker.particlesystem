@@ -1,0 +1,13 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "RailPath_Marker",
+      "PositionOffset": {
+        "Y": 0.2
+      }
+    }
+  ],
+  "CullDistance": 32.0,
+  "BoundingRadius": 1.0,
+  "IsImportant": false
+}

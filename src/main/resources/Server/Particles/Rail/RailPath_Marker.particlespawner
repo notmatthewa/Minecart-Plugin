@@ -1,0 +1,44 @@
+{
+  "RenderMode": "BlendAdd",
+  "ParticleRotationInfluence": "Billboard",
+  "LinearFiltering": true,
+  "LightInfluence": 0,
+  "MaxConcurrentParticles": 3,
+  "ParticleLifeSpan": {
+    "Min": 1,
+    "Max": 1
+  },
+  "SpawnRate": {
+    "Min": 3,
+    "Max": 3
+  },
+  "Particle": {
+    "Texture": "Particles/Textures/Shapes/Health_Regen_Plus.png",
+    "ScaleRatioConstraint": "OneToOne",
+    "Animation": {
+      "0": {
+        "Opacity": 1,
+        "Color": "#FF0000",
+        "Scale": {
+          "X": { "Min": 0.15, "Max": 0.2 },
+          "Y": { "Min": 0.15, "Max": 0.2 }
+        }
+      },
+      "100": {
+        "Opacity": 1,
+        "Color": "#FF0000",
+        "Scale": {
+          "X": { "Min": 0.15, "Max": 0.1 },
+          "Y": { "Min": 0.15, "Max": 0.1 }
+        }
+      }
+    }
+  },
+  "EmitOffset": {
+    "Y": { "Min": 0.0, "Max": 0.0 }
+  },
+  "InitialVelocity": {
+    "Speed": { "Min": 0.0, "Max": 0.0 },
+    "Pitch": { "Min": -90, "Max": -90 }
+  }
+}

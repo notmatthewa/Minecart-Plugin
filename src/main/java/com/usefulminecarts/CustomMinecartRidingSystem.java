@@ -164,15 +164,25 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
             // Get the cart's current position from our tracker
             Vector3d cartPos = cartPositions.get(cartEntityId);
             if (cartPos == null) {
-                LOGGER.atWarning().log("[CustomMinecartRiding] Cart %d not found, dismounting rider", cartEntityId);
-                PacketHandler dismountHandler = MountMovementPacketFilter.getHandlerForCart(cartEntityId);
-                if (dismountHandler != null) {
-                    restoreMovementSettings(cartEntityId, store, playerRef, dismountHandler);
-                }
-                commandBuffer.removeComponent(playerRef, CustomMinecartRiderComponent.getComponentType());
-                MinecartRiderTracker.removeRider(cartEntityId);
-                MountMovementPacketFilter.onDismount(cartEntityId);
+                LOGGER.atWarning().log("[CustomMinecartRiding] Cart %d position not found, dismounting rider", cartEntityId);
+                forceDismountRider(cartEntityId, playerRef, store, commandBuffer, "cart position not tracked");
                 return;
+            }
+
+            // Check if player is too far from cart (e.g., teleported away)
+            TransformComponent playerTransformCheck = commandBuffer.getComponent(playerRef, TransformComponent.getComponentType());
+            if (playerTransformCheck != null) {
+                Vector3d playerPos = playerTransformCheck.getPosition();
+                double distSq = (playerPos.x - cartPos.x) * (playerPos.x - cartPos.x)
+                              + (playerPos.y - cartPos.y) * (playerPos.y - cartPos.y)
+                              + (playerPos.z - cartPos.z) * (playerPos.z - cartPos.z);
+                // If player is more than 10 blocks away, they probably got teleported
+                if (distSq > 100.0) {  // 10^2 = 100
+                    LOGGER.atWarning().log("[CustomMinecartRiding] Player too far from cart %d (dist=%.1f), dismounting",
+                        cartEntityId, Math.sqrt(distSq));
+                    forceDismountRider(cartEntityId, playerRef, store, commandBuffer, "player too far from cart");
+                    return;
+                }
             }
 
             // Calculate target position (cart + offset)
@@ -420,13 +430,17 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
             return;
         }
 
+        // Set flag IMMEDIATELY to prevent re-entry from same tick
+        movementLockApplied.put(cartEntityId, true);
+
         try {
-            // 0. Add Intangible component to disable collisions
-            try {
+            // 0. Add Intangible component to disable collisions (only if not already present)
+            Intangible existingIntangible = store.getComponent(playerRef, Intangible.getComponentType());
+            if (existingIntangible == null) {
                 commandBuffer.addComponent(playerRef, Intangible.getComponentType(), Intangible.INSTANCE);
                 LOGGER.atInfo().log("[MovementLock] Added Intangible component for cart %d rider (no collisions)", cartEntityId);
-            } catch (Exception e) {
-                LOGGER.atWarning().log("[MovementLock] Failed to add Intangible: %s", e.getMessage());
+            } else {
+                LOGGER.atInfo().log("[MovementLock] Intangible already present for cart %d rider", cartEntityId);
             }
 
             // 1. Apply PhysicsValues - set very low mass to minimize gravity
@@ -487,7 +501,6 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                 }
             }
 
-            movementLockApplied.put(cartEntityId, true);
             LOGGER.atInfo().log("[MovementLock] SUCCESS! Applied movement lock for cart %d rider", cartEntityId);
 
         } catch (Exception e) {
@@ -544,6 +557,91 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     }
 
     /**
+     * Force dismount a rider - used when cart is destroyed, player teleported, or cart otherwise invalid.
+     * This is a comprehensive cleanup that handles all dismount scenarios.
+     *
+     * @param cartEntityId The cart entity ID
+     * @param playerRef The player entity reference
+     * @param store The entity store
+     * @param commandBuffer The command buffer
+     * @param reason A description of why the dismount is happening (for logging)
+     */
+    public static void forceDismountRider(int cartEntityId, Ref<EntityStore> playerRef,
+                                          Store<EntityStore> store, CommandBuffer<EntityStore> commandBuffer,
+                                          String reason) {
+        LOGGER.atInfo().log("[CustomMinecartRiding] Force dismounting rider from cart %d: %s", cartEntityId, reason);
+
+        try {
+            // 1. Remove the rider component
+            if (playerRef != null && playerRef.isValid()) {
+                commandBuffer.removeComponent(playerRef, CustomMinecartRiderComponent.getComponentType());
+
+                // 2. Restore movement states (especially sitting = false)
+                MovementStatesComponent statesComp = commandBuffer.getComponent(playerRef, MovementStatesComponent.getComponentType());
+                if (statesComp != null) {
+                    MovementStates states = statesComp.getMovementStates();
+                    if (states != null) {
+                        states.sitting = false;
+                        states.mounting = false;
+                        states.flying = false;
+                        states.onGround = true;
+                        states.falling = false;
+                        statesComp.setMovementStates(states);
+                    }
+                }
+
+                // 3. Restore full movement settings
+                PacketHandler handler = MountMovementPacketFilter.getHandlerForCart(cartEntityId);
+                if (handler != null) {
+                    restoreMovementSettings(cartEntityId, commandBuffer, playerRef, handler);
+                } else {
+                    // No handler - at least restore physics values directly
+                    PhysicsValuesSnapshot physicsSnapshot = originalPhysicsValues.get(cartEntityId);
+                    if (physicsSnapshot != null) {
+                        PhysicsValues physicsValues = commandBuffer.getComponent(playerRef, PhysicsValues.getComponentType());
+                        if (physicsValues != null) {
+                            physicsSnapshot.applyTo(physicsValues);
+                        }
+                    }
+
+                    // Remove Intangible component
+                    Intangible existingIntangible = commandBuffer.getComponent(playerRef, Intangible.getComponentType());
+                    if (existingIntangible != null) {
+                        commandBuffer.removeComponent(playerRef, Intangible.getComponentType());
+                    }
+                }
+            }
+
+            // 4. Clean up ALL tracking data for this cart
+            MinecartRiderTracker.removeRider(cartEntityId);
+            removeCart(cartEntityId);
+            MinecartMountInputBlocker.clearInput(cartEntityId);
+            MountMovementPacketFilter.onDismount(cartEntityId);
+
+            LOGGER.atInfo().log("[CustomMinecartRiding] Successfully force-dismounted rider from cart %d", cartEntityId);
+
+        } catch (Exception e) {
+            LOGGER.atWarning().log("[CustomMinecartRiding] Error during force dismount from cart %d: %s",
+                cartEntityId, e.getMessage());
+
+            // Even if there's an error, try to clean up tracking data
+            MinecartRiderTracker.removeRider(cartEntityId);
+            removeCart(cartEntityId);
+            MinecartMountInputBlocker.clearInput(cartEntityId);
+            MountMovementPacketFilter.onDismount(cartEntityId);
+        }
+    }
+
+    /**
+     * Check if a cart entity ID is still valid (cart exists in the world).
+     * Call this periodically to detect destroyed carts.
+     */
+    public static boolean isCartEntityValid(int cartEntityId) {
+        // If we have no position tracked, cart is invalid
+        return cartPositions.containsKey(cartEntityId);
+    }
+
+    /**
      * Restore original movement settings on dismount (using Store).
      * Note: Cannot remove Intangible with Store, only with CommandBuffer.
      */
@@ -581,13 +679,14 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
         movementLockApplied.remove(cartEntityId);
 
         try {
-            // 0. Remove Intangible component (restore collisions)
+            // 0. Remove Intangible component (restore collisions) - only if present
             if (commandBuffer != null && playerRef != null) {
-                try {
+                Intangible existingIntangible = commandBuffer.getComponent(playerRef, Intangible.getComponentType());
+                if (existingIntangible != null) {
                     commandBuffer.removeComponent(playerRef, Intangible.getComponentType());
                     LOGGER.atInfo().log("[MovementLock] Removed Intangible component for cart %d rider (collisions restored)", cartEntityId);
-                } catch (Exception e) {
-                    LOGGER.atWarning().log("[MovementLock] Failed to remove Intangible: %s", e.getMessage());
+                } else {
+                    LOGGER.atInfo().log("[MovementLock] Intangible not present for cart %d rider, skipping removal", cartEntityId);
                 }
             }
 

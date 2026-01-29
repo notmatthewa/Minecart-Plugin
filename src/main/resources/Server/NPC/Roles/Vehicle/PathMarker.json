@@ -1,0 +1,36 @@
+{
+  "Type": "Generic",
+  "Appearance": "Mannequin",
+  "StartState": "Idle",
+  "MotionControllerList": [],
+  "TestType": "Normal",
+  "MaxHealth": { "Value": 1 },
+  "Parameters": {},
+  "Scale": 0.01,
+  "Instructions": [
+    {
+      "Continue": true,
+      "Sensor": { "Type": "Any" },
+      "Actions": [
+        {
+          "Type": "SpawnParticles",
+          "ParticleSystem": "RailPath_Marker",
+          "Offset": [0, 0.2, 0]
+        }
+      ]
+    },
+    {
+      "Sensor": { "Type": "Any" },
+      "Actions": [
+        {
+          "Type": "Timeout",
+          "Delay": [2.5, 2.5],
+          "Action": {
+            "Type": "Die"
+          }
+        }
+      ]
+    }
+  ],
+  "NameTranslationKey": "server.npcRoles.PathMarker.name"
+}

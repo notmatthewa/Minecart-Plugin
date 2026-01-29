@@ -100,6 +100,9 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         // Register the custom minecart riding system (positions riders on carts)
         this.getEntityStoreRegistry().registerSystem(new CustomMinecartRidingSystem());
 
+        // Register the rail path visualizer for debugging
+        this.getEntityStoreRegistry().registerSystem(new RailPathVisualizer());
+
         getLogger().atInfo().log("UsefulMinecarts loaded - Chest Rail Cart ready!");
         getLogger().atInfo().log("Edit physics_config.properties to configure minecart physics");
     }
@@ -122,6 +125,7 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         MinecartRiderTracker.clear();
         CustomMinecartRidingSystem.clearAllTracking();
         MinecartMountInputBlocker.clearAll();
+        RailPathVisualizer.disableAll();
 
         if (mountMovementFilter != null) {
             mountMovementFilter.unregister();

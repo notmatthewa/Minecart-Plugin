@@ -709,6 +709,45 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         // Track if we hit a bumper (to preserve velocity after break)
         boolean hitBumper = false;
 
+        // PRE-CHECK: Verify cart isn't heading directly into a wall in the next block
+        // This catches cases where rail points extend close to block boundaries
+        {
+            int aheadBlockX = (int) Math.floor(newX + worldMoveX * 0.6);
+            int aheadBlockY = (int) Math.floor(newY);
+            int aheadBlockZ = (int) Math.floor(newZ + worldMoveZ * 0.6);
+            int currentBlockX = (int) Math.floor(newX);
+            int currentBlockZ = (int) Math.floor(newZ);
+
+            // Only check if we're looking at a different block
+            if (aheadBlockX != currentBlockX || aheadBlockZ != currentBlockZ) {
+                boolean aheadHasRail = hasRailAt(world, aheadBlockX, aheadBlockY, aheadBlockZ)
+                                    || hasRailAt(world, aheadBlockX, aheadBlockY + 1, aheadBlockZ)
+                                    || hasRailAt(world, aheadBlockX, aheadBlockY - 1, aheadBlockZ);
+
+                if (!aheadHasRail && isSolidBlock(world, aheadBlockX, aheadBlockY, aheadBlockZ)) {
+                    // Wall detected ahead - clamp position to safe distance from wall
+                    double safeOffset = 0.45;
+
+                    if (worldMoveX > 0 && aheadBlockX > currentBlockX) {
+                        newX = Math.min(newX, aheadBlockX - safeOffset);
+                    } else if (worldMoveX < 0 && aheadBlockX < currentBlockX) {
+                        newX = Math.max(newX, aheadBlockX + 1.0 + safeOffset);
+                    }
+                    if (worldMoveZ > 0 && aheadBlockZ > currentBlockZ) {
+                        newZ = Math.min(newZ, aheadBlockZ - safeOffset);
+                    } else if (worldMoveZ < 0 && aheadBlockZ < currentBlockZ) {
+                        newZ = Math.max(newZ, aheadBlockZ + 1.0 + safeOffset);
+                    }
+
+                    LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Pre-check found wall at (%d,%d,%d), clamped to (%.2f, %.2f)",
+                        entityId, aheadBlockX, aheadBlockY, aheadBlockZ, newX, newZ);
+
+                    velocity = 0;
+                    minecartVelocities.put(entityId, velocity);
+                }
+            }
+        }
+
         // Sub-step movement to follow rails properly at high speeds
         for (int step = 0; step < numSteps; step++) {
             // Move one step using WORLD direction (not rail segment direction)
@@ -795,10 +834,11 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                                      || hasRailAt(world, stepBlockX, stepBlockY - 1, stepBlockZ);
 
                 if (!hasRailAtStep && isSolidBlock(world, stepBlockX, stepBlockY, stepBlockZ)) {
-                    // Position cart at the edge of the current block
+                    // Position cart at a safe distance from the wall (not just at the edge)
+                    // Use a larger offset so the cart model doesn't visually clip into the wall
                     double edgeX = newX;
                     double edgeZ = newZ;
-                    double edgeOffset = 0.02;
+                    double edgeOffset = 0.45;  // Stop ~half a block from the wall edge
 
                     if (worldMoveX > 0) {
                         edgeX = Math.floor(newX) + 1.0 - edgeOffset;
@@ -838,6 +878,48 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 velocity = 0;
                 minecartVelocities.put(entityId, velocity);
                 break;
+            }
+
+            // ADDITIONAL CHECK: Prevent snapping into solid blocks
+            // This catches cases where the rail snap position is inside a wall
+            int snapBlockX = (int) Math.floor(newSnap.x);
+            int snapBlockY = (int) Math.floor(newSnap.y);
+            int snapBlockZ = (int) Math.floor(newSnap.z);
+
+            // Check if snap position is in a different block that's solid (not the rail block itself)
+            if ((snapBlockX != newSnap.blockX || snapBlockZ != newSnap.blockZ)) {
+                boolean snapHasRail = hasRailAt(world, snapBlockX, snapBlockY, snapBlockZ)
+                                   || hasRailAt(world, snapBlockX, snapBlockY + 1, snapBlockZ)
+                                   || hasRailAt(world, snapBlockX, snapBlockY - 1, snapBlockZ);
+
+                if (!snapHasRail && isSolidBlock(world, snapBlockX, snapBlockY, snapBlockZ)) {
+                    // Snap position would be inside a solid block - stop at safe distance
+                    double safeOffset = 0.45;
+                    double safeX = newX;
+                    double safeZ = newZ;
+
+                    // Calculate safe position based on movement direction
+                    if (worldMoveX > 0) {
+                        safeX = Math.min(newX, snapBlockX - safeOffset);
+                    } else if (worldMoveX < 0) {
+                        safeX = Math.max(newX, snapBlockX + 1.0 + safeOffset);
+                    }
+                    if (worldMoveZ > 0) {
+                        safeZ = Math.min(newZ, snapBlockZ - safeOffset);
+                    } else if (worldMoveZ < 0) {
+                        safeZ = Math.max(newZ, snapBlockZ + 1.0 + safeOffset);
+                    }
+
+                    newX = safeX;
+                    newZ = safeZ;
+
+                    LOGGER.atInfo().log("[MinecartPhysics] Cart %d: Snap would enter solid block at (%d,%d,%d), stopping at safe pos (%.2f, %.2f)",
+                        entityId, snapBlockX, snapBlockY, snapBlockZ, newX, newZ);
+
+                    velocity = 0;
+                    minecartVelocities.put(entityId, velocity);
+                    break;
+                }
             }
 
             // Apply accelerator boost when entering an accelerator rail block (multiplier)
@@ -1551,20 +1633,44 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                 int baseX = isSwitchByName ? originX : blockX;
                 int baseZ = isSwitchByName ? originZ : blockZ;
 
-                for (int i = 0; i < points.length - 1; i++) {
-                    // Get rotated coordinates (effectiveRotation is 0 for corners/switches)
-                    double[] rot1 = rotatePoint(points[i].point.x, points[i].point.z, effectiveRotation);
-                    double[] rot2 = rotatePoint(points[i + 1].point.x, points[i + 1].point.z, effectiveRotation);
+                // For corners, generate smooth curve points instead of using raw points
+                double[] smoothPoints = null;
+                int numSmoothPoints = 0;
+                if (looksLikeCorner || isCornerByName) {
+                    smoothPoints = generateSmoothCurvePoints(points, CURVE_SMOOTHING_POINTS);
+                    numSmoothPoints = smoothPoints.length / 3;
+                }
+
+                // Use smooth points for corners, raw points for everything else
+                int segmentCount = (smoothPoints != null && numSmoothPoints > 1) ? (numSmoothPoints - 1) : (points.length - 1);
+
+                for (int i = 0; i < segmentCount; i++) {
+                    double[] rot1, rot2;
+                    double py1, py2;
+
+                    if (smoothPoints != null && numSmoothPoints > 1) {
+                        // Use smooth curve points for corners
+                        rot1 = rotatePoint(smoothPoints[i * 3], smoothPoints[i * 3 + 2], effectiveRotation);
+                        rot2 = rotatePoint(smoothPoints[(i + 1) * 3], smoothPoints[(i + 1) * 3 + 2], effectiveRotation);
+                        py1 = smoothPoints[i * 3 + 1];
+                        py2 = smoothPoints[(i + 1) * 3 + 1];
+                    } else {
+                        // Use raw points for non-corners
+                        rot1 = rotatePoint(points[i].point.x, points[i].point.z, effectiveRotation);
+                        rot2 = rotatePoint(points[i + 1].point.x, points[i + 1].point.z, effectiveRotation);
+                        py1 = points[i].point.y;
+                        py2 = points[i + 1].point.y;
+                    }
 
                     double px1 = baseX + rot1[0] + switchRotCorrX;
-                    double py1 = blockY + points[i].point.y;
+                    double wy1 = blockY + py1;  // World Y coordinate
                     double pz1 = baseZ + rot1[1] + switchRotCorrZ;
                     double px2 = baseX + rot2[0] + switchRotCorrX;
-                    double py2 = blockY + points[i + 1].point.y;
+                    double wy2 = blockY + py2;  // World Y coordinate
                     double pz2 = baseZ + rot2[1] + switchRotCorrZ;
 
                     double sX = px2 - px1;
-                    double sY = py2 - py1;
+                    double sY = wy2 - wy1;
                     double sZ = pz2 - pz1;
                     double sLenSq = sX * sX + sY * sY + sZ * sZ;
 
@@ -1576,7 +1682,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 //                            i, px1, pz1, px2, pz2, baseX, baseZ, effectiveRotation, entityPos.x, entityPos.z);
                     }
 
-                    double st = ((entityPos.x - px1) * sX + (entityPos.y - py1) * sY + (entityPos.z - pz1) * sZ) / sLenSq;
+                    double st = ((entityPos.x - px1) * sX + (entityPos.y - wy1) * sY + (entityPos.z - pz1) * sZ) / sLenSq;
 
                     // Skip if cart is past this segment (allow small tolerance)
                     // For switches, use larger tolerance because rotation can offset entry points
@@ -1587,7 +1693,7 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
                     st = Math.max(0, Math.min(1, st));
 
                     double cX = px1 + st * sX;
-                    double cY = py1 + st * sY;
+                    double cY = wy1 + st * sY;
                     double cZ = pz1 + st * sZ;
 
                     double ddx = cX - entityPos.x;
@@ -1983,6 +2089,82 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
 
         return new double[] { cx + rotX, cz + rotZ };
     }
+
+    /**
+     * Generate smooth curve points for corners using quadratic Bezier interpolation.
+     * Takes the raw rail points and creates additional intermediate points for smooth curves.
+     *
+     * @param points The raw rail points from getRailConfig
+     * @param numIntermediatePoints Number of points to generate between each pair (higher = smoother)
+     * @return Array of smoothed points [x1,y1,z1, x2,y2,z2, ...]
+     */
+    private double[] generateSmoothCurvePoints(RailPoint[] points, int numIntermediatePoints) {
+        if (points == null || points.length < 2) {
+            return new double[0];
+        }
+
+        // For corners, we want to create a smooth arc
+        // Use quadratic Bezier: P(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+        // where P1 is the control point (corner vertex)
+
+        if (points.length == 2) {
+            // Just 2 points - return straight line interpolation
+            int totalPoints = numIntermediatePoints + 2;
+            double[] result = new double[totalPoints * 3];
+            for (int i = 0; i < totalPoints; i++) {
+                double t = (double) i / (totalPoints - 1);
+                result[i * 3] = points[0].point.x + t * (points[1].point.x - points[0].point.x);
+                result[i * 3 + 1] = points[0].point.y + t * (points[1].point.y - points[0].point.y);
+                result[i * 3 + 2] = points[0].point.z + t * (points[1].point.z - points[0].point.z);
+            }
+            return result;
+        }
+
+        // For 3+ points (typical corner), use the middle point(s) as control points
+        // and create a smooth Bezier curve
+
+        // Find the corner vertex (usually the middle point or where direction changes)
+        int cornerIndex = points.length / 2;
+
+        // Get start, corner, and end points
+        double startX = points[0].point.x;
+        double startY = points[0].point.y;
+        double startZ = points[0].point.z;
+
+        double cornerX = points[cornerIndex].point.x;
+        double cornerY = points[cornerIndex].point.y;
+        double cornerZ = points[cornerIndex].point.z;
+
+        double endX = points[points.length - 1].point.x;
+        double endY = points[points.length - 1].point.y;
+        double endZ = points[points.length - 1].point.z;
+
+        // Generate smooth curve using quadratic Bezier
+        int totalPoints = numIntermediatePoints + 2;
+        double[] result = new double[totalPoints * 3];
+
+        for (int i = 0; i < totalPoints; i++) {
+            double t = (double) i / (totalPoints - 1);
+            double oneMinusT = 1.0 - t;
+
+            // Quadratic Bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+            double bx = oneMinusT * oneMinusT * startX + 2 * oneMinusT * t * cornerX + t * t * endX;
+            double by = oneMinusT * oneMinusT * startY + 2 * oneMinusT * t * cornerY + t * t * endY;
+            double bz = oneMinusT * oneMinusT * startZ + 2 * oneMinusT * t * cornerZ + t * t * endZ;
+
+            result[i * 3] = bx;
+            result[i * 3 + 1] = by;
+            result[i * 3 + 2] = bz;
+        }
+
+        return result;
+    }
+
+    /**
+     * Number of intermediate points to generate for smooth curves.
+     * Higher values = smoother curves but more computation.
+     */
+    private static final int CURVE_SMOOTHING_POINTS = 8;
 
     private static class RailSnap {
         final double x, y, z;

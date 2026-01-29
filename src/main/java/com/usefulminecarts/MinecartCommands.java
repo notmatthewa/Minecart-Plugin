@@ -44,6 +44,8 @@ public class MinecartCommands extends AbstractCommand {
         this.addSubCommand(new InitialPushCommand());
         this.addSubCommand(new RotationCommand());
         this.addSubCommand(new RiderVelCommand());
+        this.addSubCommand(new PathVisCommand());
+        this.addSubCommand(new PathInfoCommand());
     }
 
     @Nullable
@@ -65,6 +67,10 @@ public class MinecartCommands extends AbstractCommand {
         context.sendMessage(Message.raw("/mc initialpush [val] - Starting velocity"));
         context.sendMessage(Message.raw("/mc rotation [val] - Rotation smoothing"));
         context.sendMessage(Message.raw("/mc ridervel [val] - Rider gravity counter"));
+        context.sendMessage(Message.raw(""));
+        context.sendMessage(Message.raw("Debug:"));
+        context.sendMessage(Message.raw("/mc pathvis - Toggle path visualization"));
+        context.sendMessage(Message.raw("/mc pathinfo - Show path info for target rail"));
         return CompletableFuture.completedFuture(null);
     }
 
@@ -423,6 +429,92 @@ public class MinecartCommands extends AbstractCommand {
                 }
             }
             return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    public static class PathVisCommand extends AbstractCommand {
+        public PathVisCommand() {
+            super("pathvis", "Toggle rail path visualization");
+            this.addAliases("pv", "paths");
+        }
+
+        @Nullable
+        @Override
+        protected CompletableFuture<Void> execute(@Nonnull CommandContext context) {
+            if (!(context.sender() instanceof Player player)) {
+                context.sendMessage(Message.raw("This command requires a player context"));
+                return CompletableFuture.completedFuture(null);
+            }
+
+            return CompletableFuture.runAsync(() -> {
+                Ref<EntityStore> ref = player.getReference();
+                if (ref == null || !ref.isValid()) {
+                    context.sendMessage(Message.raw("Could not get player reference"));
+                    return;
+                }
+
+                Store<EntityStore> store = ref.getStore();
+                UUIDComponent uuidComp = store.getComponent(ref, UUIDComponent.getComponentType());
+                if (uuidComp == null) {
+                    context.sendMessage(Message.raw("Could not get player UUID"));
+                    return;
+                }
+
+                UUID playerUuid = uuidComp.getUuid();
+                boolean enabled = RailPathVisualizer.toggleVisualization(playerUuid);
+                context.sendMessage(Message.raw("Rail path visualization " + (enabled ? "ENABLED" : "DISABLED")));
+                if (enabled) {
+                    context.sendMessage(Message.raw("Rails in range will show their path data in logs"));
+                    context.sendMessage(Message.raw("Use /mc pathinfo to see details for a specific rail"));
+                }
+            }, player.getWorld());
+        }
+    }
+
+    public static class PathInfoCommand extends AbstractCommand {
+        private static final HytaleLogger PATH_LOGGER = HytaleLogger.forEnclosingClass();
+
+        public PathInfoCommand() {
+            super("pathinfo", "Show path info for the rail you're looking at");
+            this.addAliases("pi", "path");
+        }
+
+        @Nullable
+        @Override
+        protected CompletableFuture<Void> execute(@Nonnull CommandContext context) {
+            if (!(context.sender() instanceof Player player)) {
+                PATH_LOGGER.atInfo().log("[PathInfo] Command requires player context");
+                return CompletableFuture.completedFuture(null);
+            }
+
+            return CompletableFuture.runAsync(() -> {
+                Ref<EntityStore> ref = player.getReference();
+                if (ref == null || !ref.isValid()) {
+                    context.sendMessage(Message.raw("Could not get player reference"));
+                    return;
+                }
+
+                Store<EntityStore> store = ref.getStore();
+                com.hypixel.hytale.server.core.universe.world.World world = store.getExternalData().getWorld();
+                if (world == null) {
+                    context.sendMessage(Message.raw("Could not get world"));
+                    return;
+                }
+
+                // Get target block using TargetUtil
+                com.hypixel.hytale.math.vector.Vector3i targetPos =
+                    com.hypixel.hytale.server.core.util.TargetUtil.getTargetBlock(ref, 10, store);
+
+                if (targetPos == null) {
+                    context.sendMessage(Message.raw("Not looking at a block"));
+                    return;
+                }
+
+                String info = RailPathVisualizer.getPathInfoForBlock(world, targetPos.x, targetPos.y, targetPos.z);
+                for (String line : info.split("\n")) {
+                    context.sendMessage(Message.raw(line));
+                }
+            }, player.getWorld());
         }
     }
 }

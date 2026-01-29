@@ -29,6 +29,7 @@ import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
 import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
 import com.hypixel.hytale.server.core.modules.time.TimeResource;
+import com.hypixel.hytale.server.core.io.PacketHandler;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
@@ -177,6 +178,16 @@ public class ChestCartDeathSystem extends DamageEventSystem {
             // Cart is about to be destroyed - drop inventory!
             Ref<EntityStore> cartRef = archetypeChunk.getReferenceTo(index);
 
+            // Get cart's network ID for rider dismount
+            NetworkId networkId = store.getComponent(cartRef, NetworkId.getComponentType());
+            int cartEntityId = networkId != null ? networkId.getId() : -1;
+
+            // IMPORTANT: Dismount any rider BEFORE the cart is destroyed
+            // This prevents the rider from being stuck in sitting position
+            if (cartEntityId >= 0) {
+                dismountRiderOnCartDestroy(cartEntityId, store, commandBuffer);
+            }
+
             // Get UUID for inventory lookup
             UUIDComponent uuidComp = store.getComponent(cartRef, UUIDComponent.getComponentType());
             if (uuidComp == null) return;
@@ -197,6 +208,22 @@ public class ChestCartDeathSystem extends DamageEventSystem {
             // Drop the cart itself as an item
             dropCartItem(minecart, position, transform.getRotation(), store, commandBuffer);
         }
+    }
+
+    /**
+     * Dismount any rider when the cart is destroyed.
+     * Uses the centralized forceDismountRider method for consistent cleanup.
+     */
+    private void dismountRiderOnCartDestroy(int cartEntityId, Store<EntityStore> store,
+                                            CommandBuffer<EntityStore> commandBuffer) {
+        Ref<EntityStore> riderRef = MinecartRiderTracker.getRider(cartEntityId);
+        if (riderRef == null || !riderRef.isValid()) {
+            LOGGER.atInfo().log("[ChestCartDeath] Cart %d has no rider to dismount", cartEntityId);
+            return;
+        }
+
+        LOGGER.atInfo().log("[ChestCartDeath] Dismounting rider from destroyed cart %d", cartEntityId);
+        CustomMinecartRidingSystem.forceDismountRider(cartEntityId, riderRef, store, commandBuffer, "cart destroyed");
     }
 
     /**

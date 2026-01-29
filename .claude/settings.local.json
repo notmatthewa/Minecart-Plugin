@@ -41,7 +41,9 @@
       "Bash(cmd //c \"A:\\\\Downloads\\\\Quick_Farming_by_Krynnx-1.4.1\\\\UsefulMinecarts\\\\gradlew.bat build\")",
       "Bash(cmd //c \"jar tf A:\\\\Downloads\\\\MovementCommands-1.0.3.jar\")",
       "Bash(cmd.exe /c \"gradlew.bat build --no-daemon\")",
-      "Bash(xargs -I {} sh -c 'javap -p -cp HytaleServer.jar $\\(echo {} | sed \"\"s/\\\\.class$//\"\" | tr \"\"/\"\" \"\".\"\"\\) 2>/dev/null | grep -l \"\"collisionFlags\\\\|CollisionFlags\"\" && echo {}')"
+      "Bash(xargs -I {} sh -c 'javap -p -cp HytaleServer.jar $\\(echo {} | sed \"\"s/\\\\.class$//\"\" | tr \"\"/\"\" \"\".\"\"\\) 2>/dev/null | grep -l \"\"collisionFlags\\\\|CollisionFlags\"\" && echo {}')",
+      "Bash(javac:*)",
+      "Bash(xargs:*)"
     ]
   }
 }
