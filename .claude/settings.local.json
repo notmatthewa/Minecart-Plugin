@@ -43,7 +43,12 @@
       "Bash(cmd.exe /c \"gradlew.bat build --no-daemon\")",
       "Bash(xargs -I {} sh -c 'javap -p -cp HytaleServer.jar $\\(echo {} | sed \"\"s/\\\\.class$//\"\" | tr \"\"/\"\" \"\".\"\"\\) 2>/dev/null | grep -l \"\"collisionFlags\\\\|CollisionFlags\"\" && echo {}')",
       "Bash(javac:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(strings:*)",
+      "Bash(gradlew build:*)",
+      "Bash(mvn compile:*)",
+      "Bash(grep:*)",
+      "Bash(./gradlew:*)"
     ]
   }
 }

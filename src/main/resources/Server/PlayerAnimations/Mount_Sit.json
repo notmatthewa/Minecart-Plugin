@@ -1,0 +1,13 @@
+{
+  "DisplayName": "Mount Sit",
+  "ShowInMenu": false,
+  "AnimationSet": {
+    "Animations": [
+      {
+        "Animation": "Characters/Animations/Mount/Sit.blockyanim",
+        "Looping": true,
+        "Speed": 1.0
+      }
+    ]
+  }
+}

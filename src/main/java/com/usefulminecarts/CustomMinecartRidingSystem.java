@@ -17,8 +17,16 @@ import com.hypixel.hytale.protocol.AnimationSlot;
 import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.protocol.MovementSettings;
 import com.hypixel.hytale.protocol.packets.entities.ChangeVelocity;
+import com.hypixel.hytale.protocol.packets.entities.EntityUpdates;
+import com.hypixel.hytale.protocol.packets.player.ClientTeleport;
+import com.hypixel.hytale.protocol.ModelTransform;
+import com.hypixel.hytale.protocol.Position;
 import com.hypixel.hytale.protocol.ChangeVelocityType;
-import com.hypixel.hytale.server.core.modules.entity.component.ActiveAnimationComponent;
+import com.hypixel.hytale.protocol.EntityUpdate;
+import com.hypixel.hytale.protocol.ComponentUpdate;
+import com.hypixel.hytale.protocol.ComponentUpdateType;
+import com.hypixel.hytale.server.core.modules.entity.tracker.NetworkId;
+import com.hypixel.hytale.server.core.entity.AnimationUtils;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.entity.entities.player.movement.MovementManager;
 import com.hypixel.hytale.server.core.modules.physics.component.PhysicsValues;
@@ -70,7 +78,8 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     private static int tickCounter = 0;
 
     // Configurable upward velocity to counteract gravity while riding
-    private static float riderGravityCounterVel = 0.1f;
+    // Needs to be balanced - too low = falling, too high = rising
+    private static float riderGravityCounterVel = 0.15f;
 
     public static float getRiderGravityCounterVel() {
         return riderGravityCounterVel;
@@ -83,7 +92,7 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
     // Run AFTER MinecartPhysicsSystem so cart position is finalized
     private static final Set<Dependency<EntityStore>> DEPENDENCIES = Set.of(
-        new SystemDependency<>(Order.AFTER, MinecartPhysicsSystem.class, OrderPriority.FURTHEST)
+            new SystemDependency<>(Order.AFTER, MinecartPhysicsSystem.class, OrderPriority.FURTHEST)
     );
 
     @Nonnull
@@ -91,9 +100,9 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
     public CustomMinecartRidingSystem() {
         this.query = Query.and(
-            CustomMinecartRiderComponent.getComponentType(),
-            TransformComponent.getComponentType(),
-            PlayerInput.getComponentType()
+                CustomMinecartRiderComponent.getComponentType(),
+                TransformComponent.getComponentType(),
+                PlayerInput.getComponentType()
         );
         LOGGER.atInfo().log("[CustomMinecartRiding] Initialized - will position riders using setPosition + ChangeVelocity");
     }
@@ -119,10 +128,8 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
             @Nonnull CommandBuffer<EntityStore> commandBuffer
     ) {
         tickCounter++;
-        boolean shouldLog = (tickCounter % 60 == 0);
 
         try {
-            // Skip processing if plugin is shutting down
             if (UsefulMinecartsPlugin.isShuttingDown()) {
                 return;
             }
@@ -134,7 +141,7 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
             // Clear player movement input to prevent walking while riding
             PlayerInput playerInput = (PlayerInput) archetypeChunk.getComponent(
-                index, PlayerInput.getComponentType()
+                    index, PlayerInput.getComponentType()
             );
             if (playerInput != null) {
                 playerInput.getMovementUpdateQueue().clear();
@@ -142,7 +149,7 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
             // Get our custom rider component
             CustomMinecartRiderComponent riderComp = commandBuffer.getComponent(
-                playerRef, CustomMinecartRiderComponent.getComponentType()
+                    playerRef, CustomMinecartRiderComponent.getComponentType()
             );
             if (riderComp == null) {
                 return;
@@ -174,12 +181,12 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
             if (playerTransformCheck != null) {
                 Vector3d playerPos = playerTransformCheck.getPosition();
                 double distSq = (playerPos.x - cartPos.x) * (playerPos.x - cartPos.x)
-                              + (playerPos.y - cartPos.y) * (playerPos.y - cartPos.y)
-                              + (playerPos.z - cartPos.z) * (playerPos.z - cartPos.z);
+                        + (playerPos.y - cartPos.y) * (playerPos.y - cartPos.y)
+                        + (playerPos.z - cartPos.z) * (playerPos.z - cartPos.z);
                 // If player is more than 10 blocks away, they probably got teleported
                 if (distSq > 100.0) {  // 10^2 = 100
                     LOGGER.atWarning().log("[CustomMinecartRiding] Player too far from cart %d (dist=%.1f), dismounting",
-                        cartEntityId, Math.sqrt(distSq));
+                            cartEntityId, Math.sqrt(distSq));
                     forceDismountRider(cartEntityId, playerRef, store, commandBuffer, "player too far from cart");
                     return;
                 }
@@ -187,12 +194,12 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
             // Calculate target position (cart + offset)
             double targetX = cartPos.x + offset.x;
-            double targetY = cartPos.y + offset.y - 0.5f;
-            double targetZ = cartPos.z + offset.z - 0.25f;
+            double targetY = cartPos.y + offset.y;
+            double targetZ = cartPos.z + offset.z;
 
             // Get player transform
             TransformComponent playerTransform = commandBuffer.getComponent(
-                playerRef, TransformComponent.getComponentType()
+                    playerRef, TransformComponent.getComponentType()
             );
             if (playerTransform == null) {
                 return;
@@ -220,27 +227,22 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
 
             // Detect flying
             boolean isFlying = (clientY - targetY) > 2.0;
-            if (isFlying && shouldLog) {
-                LOGGER.atInfo().log("[RiderDebug] cart=%d | FLYING DETECTED! clientY=%.2f targetY=%.2f diff=%.2f",
-                    cartEntityId, clientY, targetY, clientY - targetY);
-            }
 
             // Calculate distance from target
             double distFromTarget = Math.sqrt(
-                (clientX - targetX) * (clientX - targetX) +
-                (clientY - targetY) * (clientY - targetY) +
-                (clientZ - targetZ) * (clientZ - targetZ)
+                    (clientX - targetX) * (clientX - targetX) +
+                            (clientY - targetY) * (clientY - targetY) +
+                            (clientZ - targetZ) * (clientZ - targetZ)
             );
 
             // Calculate cart velocity from position delta
             Vector3d prevPos = prevCartPositions.get(cartEntityId);
             float cartVelX = 0, cartVelY = 0, cartVelZ = 0;
-            double cartDeltaX = 0, cartDeltaY = 0, cartDeltaZ = 0;
 
             if (prevPos != null && !justMounted) {
-                cartDeltaX = cartPos.x - prevPos.x;
-                cartDeltaY = cartPos.y - prevPos.y;
-                cartDeltaZ = cartPos.z - prevPos.z;
+                double cartDeltaX = cartPos.x - prevPos.x;
+                double cartDeltaY = cartPos.y - prevPos.y;
+                double cartDeltaZ = cartPos.z - prevPos.z;
                 float tickRate = 30f;
                 float velocityScale = 0.9f;
                 cartVelX = (float)cartDeltaX * tickRate * velocityScale;
@@ -255,50 +257,41 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                 cartVelY = riderGravityCounterVel;
             }
 
-            // Log detailed state
-            if (shouldLog) {
-                LOGGER.atInfo().log("[RiderDebug] cart=%d | cartPos=(%.2f,%.2f,%.2f) | cartDelta=(%.3f,%.3f,%.3f) | offset=(%.2f,%.2f,%.2f)",
-                    cartEntityId, cartPos.x, cartPos.y, cartPos.z,
-                    cartDeltaX, cartDeltaY, cartDeltaZ,
-                    offset.x, offset.y, offset.z);
-                LOGGER.atInfo().log("[RiderDebug] cart=%d | targetPos=(%.2f,%.2f,%.2f) | serverPos=(%.2f,%.2f,%.2f) | clientPos=(%.2f,%.2f,%.2f) | distFromTarget=%.3f | hasClientPos=%b",
-                    cartEntityId, targetX, targetY, targetZ,
-                    serverX, serverY, serverZ,
-                    clientX, clientY, clientZ, distFromTarget, hasClientPos);
-            }
+            // Calculate how far player has drifted from target
+            double driftX = serverX - targetX;
+            double driftY = serverY - targetY;
+            double driftZ = serverZ - targetZ;
+            double driftDist = Math.sqrt(driftX * driftX + driftY * driftY + driftZ * driftZ);
 
-            // 1. Set server-side position directly
+            // Always set server-side position to keep player on cart
+            // This is server-authoritative and doesn't cause client camera jerk
             playerTransform.setPosition(new Vector3d(targetX, targetY, targetZ));
 
-            // 1b. Use Velocity component to counteract gravity
-            // This applies server-side velocity that should counteract falling
+            // Set velocity to counter gravity and match cart movement
             try {
                 Velocity velocityComp = commandBuffer.getComponent(playerRef, Velocity.getComponentType());
                 if (velocityComp != null) {
-                    // Set velocity to match cart movement + upward to counter gravity
-                    // Increase until player stops falling
-                    double antiGravityY = 0.5; // Upward force to counteract gravity per tick
-
                     if (isFlying) {
-                        // Strong downward pull if trying to fly away
                         velocityComp.set(cartVelX, -20.0, cartVelZ);
                     } else {
-                        // Normal riding - set velocity to cart velocity + anti-gravity
-                        velocityComp.set(cartVelX, cartVelY + antiGravityY, cartVelZ);
+                        // Upward velocity to counter gravity + drift correction
+                        double upwardForce = riderGravityCounterVel - driftY * 2.0;
+                        velocityComp.set(cartVelX, cartVelY + upwardForce, cartVelZ);
                     }
                 }
             } catch (Exception e) {
                 // Ignore velocity errors
             }
 
-            // 2. Set player to mounting/sitting state
+            // Set player to sitting state
             try {
                 MovementStatesComponent moveComp = commandBuffer.getComponent(
-                    playerRef, MovementStatesComponent.getComponentType()
+                        playerRef, MovementStatesComponent.getComponentType()
                 );
                 if (moveComp != null) {
                     MovementStates states = moveComp.getMovementStates();
                     if (states != null) {
+                        states.mounting = true;
                         states.sitting = true;
                         states.onGround = true;
                         states.falling = false;
@@ -306,94 +299,92 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                         states.walking = false;
                         states.running = false;
                         states.sprinting = false;
+                        states.crouching = false;
                         moveComp.setMovementStates(states);
                     }
                 }
             } catch (Exception e) {
-                // Ignore - sitting state is cosmetic
+                // Ignore
             }
 
-            // 2b. Try to play sitting animation directly
-            try {
-                ActiveAnimationComponent animComp = commandBuffer.getComponent(
-                    playerRef, ActiveAnimationComponent.getComponentType()
-                );
-                if (animComp != null) {
-                    animComp.setPlayingAnimation(AnimationSlot.Movement, "sitting");
-                    animComp.setPlayingAnimation(AnimationSlot.Status, "sitting");
-                }
-            } catch (Exception e) {
-                // Ignore - animation is cosmetic
-            }
-
-            // 3. Handle position corrections using Teleport component
-            float[] clientRot = MinecartMountInputBlocker.getClientRotation(cartEntityId);
-            Vector3f bodyRotation = new Vector3f(0, 0, 0);
-            Vector3f headRotation = new Vector3f(0, 0, 0);
-            if (clientRot != null) {
-                bodyRotation = new Vector3f(0, clientRot[0], 0);
-                headRotation = new Vector3f(clientRot[2], clientRot[1], 0);
-            }
-
-            boolean shouldTeleport = justMounted || (tickCounter % 10 == 0);
-
-            if (shouldTeleport) {
-                try {
-                    Teleport teleport = Teleport.createForPlayer(
-                        new Vector3d(targetX, targetY, targetZ),
-                        bodyRotation
-                    ).withoutVelocityReset();
-
-                    if (clientRot != null) {
-                        teleport.setHeadRotation(headRotation);
+            // Play sitting animation
+            if (justMounted) {
+                String[] animNamesToTry = {"Sit", "MountIdle", "SitGround", "Sit2"};
+                for (String animName : animNamesToTry) {
+                    try {
+                        AnimationUtils.playAnimation(playerRef, AnimationSlot.Action, null, animName, true, store);
+                        break;
+                    } catch (Exception e) {
+                        // Try next
                     }
+                }
+            }
 
-                    commandBuffer.addComponent(playerRef, Teleport.getComponentType(), teleport);
+            // 3. Sync position to client via ClientTeleport packet
+            // Only teleport on mount or when drifted significantly
+            boolean shouldTeleport = justMounted || driftDist > 0.1;
+
+            // Apply movement lock + send position update
+            PacketHandler handler = MountMovementPacketFilter.getHandlerForCart(cartEntityId);
+
+            if (shouldTeleport && handler != null) {
+                try {
+                    // Send ClientTeleport packet directly with position only (null orientations)
+                    // This should update position without affecting camera rotation
+                    ModelTransform transform = new ModelTransform(
+                            new Position(targetX, targetY, targetZ),
+                            null,  // null bodyOrientation = don't change
+                            null   // null lookOrientation = don't change camera
+                    );
+
+                    ClientTeleport teleportPacket = new ClientTeleport(
+                            (byte) 0,    // teleportId
+                            transform,
+                            false        // don't reset velocity
+                    );
+
+                    handler.writeNoCache(teleportPacket);
 
                     if (justMounted) {
-                        LOGGER.atInfo().log("[RiderDebug] cart=%d | TELEPORT on mount to (%.2f,%.2f,%.2f) clientRot=%s",
-                            cartEntityId, targetX, targetY, targetZ,
-                            clientRot != null ? String.format("(%.1f,%.1f,%.1f)", clientRot[0], clientRot[1], clientRot[2]) : "null");
                         justMountedCarts.remove(cartEntityId);
-                    } else if (shouldLog) {
-                        LOGGER.atInfo().log("[RiderDebug] cart=%d | TELEPORT correction, dist=%.3f, clientRot=%s",
-                            cartEntityId, distFromTarget,
-                            clientRot != null ? String.format("(%.1f,%.1f,%.1f)", clientRot[0], clientRot[1], clientRot[2]) : "null");
                     }
                 } catch (Exception e) {
-                    LOGGER.atWarning().log("[RiderDebug] Failed to teleport: %s", e.getMessage());
+                    // Fallback to Teleport component if packet fails
+                    try {
+                        Teleport teleport = Teleport.createForPlayer(
+                                new Vector3d(targetX, targetY, targetZ),
+                                new Vector3f(0, 0, 0)
+                        ).withoutVelocityReset();
+                        commandBuffer.addComponent(playerRef, Teleport.getComponentType(), teleport);
+                    } catch (Exception e2) {
+                        // Ignore
+                    }
                 }
             }
-
-            // 4. Send ChangeVelocity for smooth movement + apply movement lock
-            PacketHandler handler = MountMovementPacketFilter.getHandlerForCart(cartEntityId);
             if (handler != null) {
-                // Apply movement lock on first tick with handler
                 if (!movementLockApplied.getOrDefault(cartEntityId, false)) {
                     applyMovementLock(cartEntityId, store, playerRef, handler, commandBuffer);
                 }
 
-                // Send cart velocity to keep player moving with cart
+                // Send velocity to client to help with prediction
+                // Include drift correction to pull client back toward target
                 try {
+                    float velX = cartVelX - (float)(driftX * 2.0);
+                    float velZ = cartVelZ - (float)(driftZ * 2.0);
+                    float velY = cartVelY - (float)(driftY * 2.0) + riderGravityCounterVel;
+
+                    if (isFlying) {
+                        velY = -20.0f;
+                    }
+
                     ChangeVelocity changeVel = new ChangeVelocity(
-                        cartVelX, cartVelY, cartVelZ,
-                        ChangeVelocityType.Set,
-                        null
+                            velX, velY, velZ,
+                            ChangeVelocityType.Set,
+                            null
                     );
                     handler.writeNoCache(changeVel);
-
-                    if (shouldLog) {
-                        LOGGER.atInfo().log("[RiderDebug] cart=%d | vel=(%.2f,%.2f,%.2f) | dist=%.3f | flying=%b",
-                            cartEntityId, cartVelX, cartVelY, cartVelZ, distFromTarget, isFlying);
-                    }
                 } catch (Exception e) {
-                    if (shouldLog) {
-                        LOGGER.atWarning().log("[RiderDebug] Failed to send ChangeVelocity: %s", e.getMessage());
-                    }
-                }
-            } else {
-                if (shouldLog || justMounted) {
-                    LOGGER.atInfo().log("[RiderDebug] cart=%d | No PacketHandler yet (justMounted=%b)", cartEntityId, justMounted);
+                    // Ignore velocity errors
                 }
             }
 
@@ -407,21 +398,13 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                 prev.z = cartPos.z;
             }
 
-            // Log AFTER state
-            Vector3d afterPos = playerTransform.getPosition();
-            if (shouldLog) {
-                LOGGER.atInfo().log("[RiderDebug] cart=%d | AFTER setPosition: playerPos=(%.2f,%.2f,%.2f)",
-                    cartEntityId, afterPos.x, afterPos.y, afterPos.z);
-            }
-
         } catch (Exception e) {
             LOGGER.atSevere().log("[CustomMinecartRiding] Error in tick: %s", e.getMessage());
-            e.printStackTrace();
         }
     }
 
     /**
-     * Apply movement lock - sets low mass for low gravity, low movement settings, and makes player intangible.
+     * Apply movement lock - sets low mass, low movement settings, and makes player intangible.
      */
     public static void applyMovementLock(int cartEntityId, Store<EntityStore> store,
                                          Ref<EntityStore> playerRef, PacketHandler handler,
@@ -429,31 +412,56 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
         if (movementLockApplied.getOrDefault(cartEntityId, false)) {
             return;
         }
-
-        // Set flag IMMEDIATELY to prevent re-entry from same tick
         movementLockApplied.put(cartEntityId, true);
 
         try {
-            // 0. Add Intangible component to disable collisions (only if not already present)
+            // Add Intangible component (server-side)
             Intangible existingIntangible = store.getComponent(playerRef, Intangible.getComponentType());
             if (existingIntangible == null) {
                 commandBuffer.addComponent(playerRef, Intangible.getComponentType(), Intangible.INSTANCE);
-                LOGGER.atInfo().log("[MovementLock] Added Intangible component for cart %d rider (no collisions)", cartEntityId);
-            } else {
-                LOGGER.atInfo().log("[MovementLock] Intangible already present for cart %d rider", cartEntityId);
             }
 
-            // 1. Apply PhysicsValues - set very low mass to minimize gravity
+            // Send Intangible update to client to disable client-side collisions
+            try {
+                NetworkId playerNetworkId = store.getComponent(playerRef, NetworkId.getComponentType());
+                if (playerNetworkId != null && handler != null) {
+                    // Create ComponentUpdate with Intangible type
+                    ComponentUpdate intangibleUpdate = new ComponentUpdate();
+                    intangibleUpdate.type = ComponentUpdateType.Intangible;
+
+                    // Also try HitboxCollision with index -1 to disable collision
+                    ComponentUpdate hitboxUpdate = new ComponentUpdate();
+                    hitboxUpdate.type = ComponentUpdateType.HitboxCollision;
+                    hitboxUpdate.hitboxCollisionConfigIndex = -1;  // Try -1 to disable
+
+                    // Create EntityUpdate for the player with both updates
+                    EntityUpdate entityUpdate = new EntityUpdate(
+                            playerNetworkId.getId(),
+                            null,  // no removed components
+                            new ComponentUpdate[] { intangibleUpdate, hitboxUpdate }
+                    );
+
+                    // Send EntityUpdates packet to client
+                    EntityUpdates packet = new EntityUpdates(
+                            null,  // no removed entities
+                            new EntityUpdate[] { entityUpdate }
+                    );
+                    handler.writeNoCache(packet);
+                    LOGGER.atInfo().log("[CustomMinecartRiding] Sent Intangible+HitboxCollision update to client for player %d", playerNetworkId.getId());
+                }
+            } catch (Exception e) {
+                LOGGER.atWarning().log("[CustomMinecartRiding] Failed to send collision packet: %s", e.getMessage());
+            }
+
+            // Apply PhysicsValues - low mass to minimize gravity
             PhysicsValues physicsValues = store.getComponent(playerRef, PhysicsValues.getComponentType());
             if (physicsValues != null) {
                 if (!originalPhysicsValues.containsKey(cartEntityId)) {
                     originalPhysicsValues.put(cartEntityId, new PhysicsValuesSnapshot(
-                        physicsValues.getMass(),
-                        physicsValues.getDragCoefficient(),
-                        physicsValues.isInvertedGravity()
+                            physicsValues.getMass(),
+                            physicsValues.getDragCoefficient(),
+                            physicsValues.isInvertedGravity()
                     ));
-                    LOGGER.atInfo().log("[MovementLock] Saved original PhysicsValues for cart %d: mass=%.4f",
-                        cartEntityId, physicsValues.getMass());
                 }
 
                 try {
@@ -464,21 +472,18 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                     java.lang.reflect.Field dragField = PhysicsValues.class.getDeclaredField("dragCoefficient");
                     dragField.setAccessible(true);
                     dragField.setDouble(physicsValues, 10.0);
-
-                    LOGGER.atInfo().log("[MovementLock] Set PhysicsValues: mass=0.001, drag=10.0");
                 } catch (Exception e) {
-                    LOGGER.atWarning().log("[MovementLock] Failed to set PhysicsValues: %s", e.getMessage());
+                    // Ignore
                 }
             }
 
-            // 2. Apply MovementSettings - disable movement abilities
+            // Apply MovementSettings - disable movement abilities
             MovementManager movementManager = store.getComponent(playerRef, MovementManager.getComponentType());
             if (movementManager != null) {
                 MovementSettings settings = movementManager.getSettings();
                 if (settings != null) {
                     if (!originalMovementSettings.containsKey(cartEntityId)) {
                         originalMovementSettings.put(cartEntityId, new MovementSettingsSnapshot(settings));
-                        LOGGER.atInfo().log("[MovementLock] Saved original MovementSettings for cart %d", cartEntityId);
                     }
 
                     settings.acceleration = 0.01f;
@@ -497,14 +502,10 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                     settings.velocityResistance = 1.0f;
 
                     movementManager.update(handler);
-                    LOGGER.atInfo().log("[MovementLock] Applied MovementSettings with low values");
                 }
             }
-
-            LOGGER.atInfo().log("[MovementLock] SUCCESS! Applied movement lock for cart %d rider", cartEntityId);
-
         } catch (Exception e) {
-            LOGGER.atWarning().log("[MovementLock] EXCEPTION applying lock for cart %d: %s", cartEntityId, e.getMessage());
+            // Ignore
         }
     }
 
@@ -529,7 +530,6 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     public static void markJustMounted(int entityId) {
         justMountedCarts.put(entityId, MOUNT_SNAP_RETRIES);
         prevCartPositions.remove(entityId);
-        LOGGER.atInfo().log("[CustomMinecartRiding] Marked cart %d as just mounted (will retry snap for %d ticks)", entityId, MOUNT_SNAP_RETRIES);
     }
 
     /**
@@ -557,26 +557,16 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     }
 
     /**
-     * Force dismount a rider - used when cart is destroyed, player teleported, or cart otherwise invalid.
-     * This is a comprehensive cleanup that handles all dismount scenarios.
-     *
-     * @param cartEntityId The cart entity ID
-     * @param playerRef The player entity reference
-     * @param store The entity store
-     * @param commandBuffer The command buffer
-     * @param reason A description of why the dismount is happening (for logging)
+     * Force dismount a rider - used when cart is destroyed or player teleported.
      */
     public static void forceDismountRider(int cartEntityId, Ref<EntityStore> playerRef,
                                           Store<EntityStore> store, CommandBuffer<EntityStore> commandBuffer,
                                           String reason) {
-        LOGGER.atInfo().log("[CustomMinecartRiding] Force dismounting rider from cart %d: %s", cartEntityId, reason);
-
         try {
-            // 1. Remove the rider component
             if (playerRef != null && playerRef.isValid()) {
                 commandBuffer.removeComponent(playerRef, CustomMinecartRiderComponent.getComponentType());
 
-                // 2. Restore movement states (especially sitting = false)
+                // Restore movement states
                 MovementStatesComponent statesComp = commandBuffer.getComponent(playerRef, MovementStatesComponent.getComponentType());
                 if (statesComp != null) {
                     MovementStates states = statesComp.getMovementStates();
@@ -590,12 +580,11 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                     }
                 }
 
-                // 3. Restore full movement settings
+                // Restore movement settings
                 PacketHandler handler = MountMovementPacketFilter.getHandlerForCart(cartEntityId);
                 if (handler != null) {
                     restoreMovementSettings(cartEntityId, commandBuffer, playerRef, handler);
                 } else {
-                    // No handler - at least restore physics values directly
                     PhysicsValuesSnapshot physicsSnapshot = originalPhysicsValues.get(cartEntityId);
                     if (physicsSnapshot != null) {
                         PhysicsValues physicsValues = commandBuffer.getComponent(playerRef, PhysicsValues.getComponentType());
@@ -604,32 +593,21 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                         }
                     }
 
-                    // Remove Intangible component
                     Intangible existingIntangible = commandBuffer.getComponent(playerRef, Intangible.getComponentType());
                     if (existingIntangible != null) {
                         commandBuffer.removeComponent(playerRef, Intangible.getComponentType());
                     }
                 }
             }
-
-            // 4. Clean up ALL tracking data for this cart
-            MinecartRiderTracker.removeRider(cartEntityId);
-            removeCart(cartEntityId);
-            MinecartMountInputBlocker.clearInput(cartEntityId);
-            MountMovementPacketFilter.onDismount(cartEntityId);
-
-            LOGGER.atInfo().log("[CustomMinecartRiding] Successfully force-dismounted rider from cart %d", cartEntityId);
-
         } catch (Exception e) {
-            LOGGER.atWarning().log("[CustomMinecartRiding] Error during force dismount from cart %d: %s",
-                cartEntityId, e.getMessage());
-
-            // Even if there's an error, try to clean up tracking data
-            MinecartRiderTracker.removeRider(cartEntityId);
-            removeCart(cartEntityId);
-            MinecartMountInputBlocker.clearInput(cartEntityId);
-            MountMovementPacketFilter.onDismount(cartEntityId);
+            // Ignore errors
         }
+
+        // Clean up tracking data
+        MinecartRiderTracker.removeRider(cartEntityId);
+        removeCart(cartEntityId);
+        MinecartMountInputBlocker.clearInput(cartEntityId);
+        MountMovementPacketFilter.onDismount(cartEntityId);
     }
 
     /**
@@ -648,10 +626,10 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     public static void restoreMovementSettings(int cartEntityId, Store<EntityStore> store,
                                                Ref<EntityStore> playerRef, PacketHandler handler) {
         restoreAllSettingsInternal(cartEntityId,
-            () -> store.getComponent(playerRef, MovementManager.getComponentType()),
-            () -> store.getComponent(playerRef, PhysicsValues.getComponentType()),
-            () -> store.getComponent(playerRef, MovementStatesComponent.getComponentType()),
-            handler, null, null);
+                () -> store.getComponent(playerRef, MovementManager.getComponentType()),
+                () -> store.getComponent(playerRef, PhysicsValues.getComponentType()),
+                () -> store.getComponent(playerRef, MovementStatesComponent.getComponentType()),
+                handler, null, null);
     }
 
     /**
@@ -660,47 +638,43 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
     public static void restoreMovementSettings(int cartEntityId, CommandBuffer<EntityStore> commandBuffer,
                                                Ref<EntityStore> playerRef, PacketHandler handler) {
         restoreAllSettingsInternal(cartEntityId,
-            () -> commandBuffer.getComponent(playerRef, MovementManager.getComponentType()),
-            () -> commandBuffer.getComponent(playerRef, PhysicsValues.getComponentType()),
-            () -> commandBuffer.getComponent(playerRef, MovementStatesComponent.getComponentType()),
-            handler, commandBuffer, playerRef);
+                () -> commandBuffer.getComponent(playerRef, MovementManager.getComponentType()),
+                () -> commandBuffer.getComponent(playerRef, PhysicsValues.getComponentType()),
+                () -> commandBuffer.getComponent(playerRef, MovementStatesComponent.getComponentType()),
+                handler, commandBuffer, playerRef);
     }
 
     /**
      * Internal implementation that restores all settings.
      */
     private static void restoreAllSettingsInternal(int cartEntityId,
-                                           java.util.function.Supplier<MovementManager> managerSupplier,
-                                           java.util.function.Supplier<PhysicsValues> physicsSupplier,
-                                           java.util.function.Supplier<MovementStatesComponent> statesSupplier,
-                                           PacketHandler handler,
-                                           CommandBuffer<EntityStore> commandBuffer,
-                                           Ref<EntityStore> playerRef) {
+                                                   java.util.function.Supplier<MovementManager> managerSupplier,
+                                                   java.util.function.Supplier<PhysicsValues> physicsSupplier,
+                                                   java.util.function.Supplier<MovementStatesComponent> statesSupplier,
+                                                   PacketHandler handler,
+                                                   CommandBuffer<EntityStore> commandBuffer,
+                                                   Ref<EntityStore> playerRef) {
         movementLockApplied.remove(cartEntityId);
 
         try {
-            // 0. Remove Intangible component (restore collisions) - only if present
+            // Remove Intangible component
             if (commandBuffer != null && playerRef != null) {
                 Intangible existingIntangible = commandBuffer.getComponent(playerRef, Intangible.getComponentType());
                 if (existingIntangible != null) {
                     commandBuffer.removeComponent(playerRef, Intangible.getComponentType());
-                    LOGGER.atInfo().log("[MovementLock] Removed Intangible component for cart %d rider (collisions restored)", cartEntityId);
-                } else {
-                    LOGGER.atInfo().log("[MovementLock] Intangible not present for cart %d rider, skipping removal", cartEntityId);
                 }
             }
 
-            // 1. Restore PhysicsValues
+            // Restore PhysicsValues
             PhysicsValuesSnapshot physicsSnapshot = originalPhysicsValues.remove(cartEntityId);
             if (physicsSnapshot != null) {
                 PhysicsValues physicsValues = physicsSupplier.get();
                 if (physicsValues != null) {
                     physicsSnapshot.applyTo(physicsValues);
-                    LOGGER.atInfo().log("[MovementLock] Restored PhysicsValues for cart %d", cartEntityId);
                 }
             }
 
-            // 2. Restore MovementStates
+            // Restore MovementStates
             MovementStatesComponent statesComp = statesSupplier.get();
             if (statesComp != null) {
                 MovementStates states = statesComp.getMovementStates();
@@ -709,11 +683,10 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                     states.mounting = false;
                     states.flying = false;
                     states.onGround = true;
-                    LOGGER.atInfo().log("[MovementLock] Restored MovementStates for cart %d", cartEntityId);
                 }
             }
 
-            // 3. Restore MovementSettings
+            // Restore MovementSettings
             MovementSettingsSnapshot snapshot = originalMovementSettings.remove(cartEntityId);
             if (snapshot != null) {
                 MovementManager movementManager = managerSupplier.get();
@@ -722,15 +695,11 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                     if (settings != null) {
                         snapshot.applyTo(settings);
                         movementManager.update(handler);
-                        LOGGER.atInfo().log("[MovementLock] Restored MovementSettings for cart %d", cartEntityId);
                     }
                 }
             }
-
-            LOGGER.atInfo().log("[MovementLock] All settings restored for cart %d rider", cartEntityId);
-
         } catch (Exception e) {
-            LOGGER.atWarning().log("[MovementLock] Failed to restore settings for cart %d: %s", cartEntityId, e.getMessage());
+            // Ignore
         }
     }
 
@@ -816,7 +785,7 @@ public class CustomMinecartRidingSystem extends EntityTickingSystem<EntityStore>
                 gravField.setAccessible(true);
                 gravField.setBoolean(pv, this.invertedGravity);
             } catch (Exception e) {
-                LOGGER.atWarning().log("[PhysicsValuesSnapshot] Failed to restore: %s", e.getMessage());
+                // Ignore
             }
         }
     }

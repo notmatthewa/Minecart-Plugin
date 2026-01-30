@@ -1,0 +1,62 @@
+{
+  "TranslationProperties": {
+    "Name": "items.UsefulMinecarts_Rail_Wrench.name",
+    "Description": "items.UsefulMinecarts_Rail_Wrench.description"
+  },
+  "Icon": "Icons/ItemsGenerated/UsefulMinecarts_Rail_Accel.png",
+  "Categories": [
+    "Tools"
+  ],
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "Effects": {
+            "ItemAnimationId": "Interact"
+          },
+          "RunTime": 0.1,
+          "Next": {
+            "Type": "UsefulMinecartsRailWrench"
+          }
+        }
+      ]
+    },
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "Effects": {
+            "ItemAnimationId": "Interact"
+          },
+          "RunTime": 0.1,
+          "Next": {
+            "Type": "UsefulMinecartsRailWrench"
+          }
+        }
+      ]
+    }
+  },
+  "PlayerAnimationsId": "Item",
+  "Model": "Items/Vehicles/UsefulMinecarts_ChestMinecart.blockymodel",
+  "Texture": "Items/Vehicles/UsefulMinecarts_ChestMinecart_Texture.png",
+  "IconProperties": {
+    "Scale": 0.7,
+    "Rotation": [
+      0,
+      45,
+      -45
+    ],
+    "Translation": [
+      0,
+      0
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Tool",
+      "RailWrench"
+    ]
+  },
+  "MaxStack": 1
+}

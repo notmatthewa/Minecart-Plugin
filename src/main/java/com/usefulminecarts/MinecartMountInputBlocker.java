@@ -233,6 +233,14 @@ public class MinecartMountInputBlocker extends EntityTickingSystem<EntityStore> 
             CLIENT_ROTATIONS.put(cartEntityId, new float[]{bodyYaw, headYaw, headPitch});
         }
 
+        MovementStateReader movementState = new MovementStateReader(queue);
+        if (movementState.isWalking() || movementState.isGliding()) {
+            LOGGER.atInfo().log("[MinecartMountInputBlocker] cart %d: player is WALKING", cartEntityId);
+        }
+        if (movementState.isCrouching()) {
+            LOGGER.atInfo().log("[MinecartMountInputBlocker] cart %d: player is CROUCHING", cartEntityId);
+        }
+
         // Clear the entire queue - HandleMountInput will have nothing to process
         queue.clear();
 

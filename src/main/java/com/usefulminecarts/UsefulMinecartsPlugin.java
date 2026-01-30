@@ -69,7 +69,8 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         interactions.register("UsefulMinecartsMount", MinecartMountInteraction.class, MinecartMountInteraction.CODEC);
         interactions.register("UsefulMinecartsCustomMount", CustomMinecartMount.class, CustomMinecartMount.CODEC);
         interactions.register("UsefulMinecartsTiedChicken", TiedChickenPlaceSystem.class, TiedChickenPlaceSystem.CODEC);
-        getLogger().atInfo().log("[UsefulMinecarts] Registered CustomMinecartMount and TiedChicken interactions");
+//        interactions.register("UsefulMinecartsRailWrench", RailWrenchInteraction.class, RailWrenchInteraction.CODEC);
+        getLogger().atInfo().log("[UsefulMinecarts] Registered interactions: CustomMinecartMount, TiedChicken, RailWrench");
 
         // Register minecart physics commands
         this.getCommandRegistry().registerCommand(new MinecartCommands());
@@ -103,8 +104,7 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         // Register the rail path visualizer for debugging
         this.getEntityStoreRegistry().registerSystem(new RailPathVisualizer());
 
-        getLogger().atInfo().log("UsefulMinecarts loaded - Chest Rail Cart ready!");
-        getLogger().atInfo().log("Edit physics_config.properties to configure minecart physics");
+        getLogger().atInfo().log("UsefulMinecarts loaded!");
     }
 
     @Override
