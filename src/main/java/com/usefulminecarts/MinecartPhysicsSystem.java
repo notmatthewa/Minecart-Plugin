@@ -92,6 +92,29 @@ public class MinecartPhysicsSystem extends EntityTickingSystem<EntityStore> {
         LOGGER.atInfo().log("[MinecartPhysics] Velocity after bump: %.3f (expected %.3f)", checkVel, strength);
     }
 
+    /**
+     * Get the facing yaw of a minecart.
+     * Used by CustomMinecartRidingSystem to rotate the rider offset based on cart direction.
+     *
+     * @param entityId The cart's network entity ID
+     * @return The cart's facing yaw in degrees, or 0 if not tracked
+     */
+    public static float getCartFacingYaw(int entityId) {
+        Float yaw = minecartFacingYaw.get(entityId);
+        return yaw != null ? yaw : 0f;
+    }
+
+    /**
+     * Get the world movement direction of a minecart.
+     * Used by CustomMinecartRidingSystem to rotate the rider offset based on cart direction.
+     *
+     * @param entityId The cart's network entity ID
+     * @return [dirX, dirZ] normalized direction, or null if not tracked
+     */
+    public static double[] getCartWorldDirection(int entityId) {
+        return minecartWorldDirection.get(entityId);
+    }
+
     // Helper: Get entry edge from world movement direction
     // Entry edge = the edge of the block the cart enters THROUGH (where it came from)
     private int getEntryEdge(double worldMoveX, double worldMoveZ) {

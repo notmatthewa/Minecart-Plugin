@@ -3,6 +3,7 @@ package com.usefulminecarts;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.usefulminecarts.commands.MinecartCommandCollection;
 
 import javax.annotation.Nonnull;
 
@@ -73,8 +74,8 @@ public class UsefulMinecartsPlugin extends JavaPlugin {
         getLogger().atInfo().log("[UsefulMinecarts] Registered interactions: CustomMinecartMount, TiedChicken, RailWrench");
 
         // Register minecart physics commands
-        this.getCommandRegistry().registerCommand(new MinecartCommands());
-        getLogger().atInfo().log("[MinecartCommands] Registered /minecart command (aliases: /mc, /cart)");
+        this.getCommandRegistry().registerCommand(new MinecartCommandCollection());
+        getLogger().atInfo().log("[MinecartCommands] Registered /mc command with subcommands: status, grav, debug, speed, friction, reset");
 
         // Initialize storage (just sets up directory, no loading)
         ChestMinecartStorage.init();

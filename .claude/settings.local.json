@@ -48,7 +48,11 @@
       "Bash(gradlew build:*)",
       "Bash(mvn compile:*)",
       "Bash(grep:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "WebFetch(domain:hytalemodding.dev)",
+      "Bash(git checkout:*)",
+      "WebSearch",
+      "WebFetch(domain:hytale-docs.pages.dev)"
     ]
   }
 }

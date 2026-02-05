@@ -31,6 +31,10 @@ public class MinecartConfig {
     private static double acceleratorBoost = 1.05;     // Speed multiplier when passing over accelerator rails (e.g., 1.2 = 20% faster)
     private static double playerInputStrength = 3.0;   // How much momentum player W/S keys add (blocks/s²)
 
+    // Rider settings
+    private static int gravityMode = 0;                // 0=zero velocity, 1=counteract, 2=zero all
+    private static int debugLogFrequency = 0;          // 0=disabled, N=log every N ticks
+
     // Getters
     public static double getMaxSpeed() { return maxSpeed; }
     public static double getAcceleration() { return acceleration; }
@@ -43,6 +47,8 @@ public class MinecartConfig {
     public static double getRotationSmoothing() { return rotationSmoothing; }
     public static double getAcceleratorBoost() { return acceleratorBoost; }
     public static double getPlayerInputStrength() { return playerInputStrength; }
+    public static int getGravityMode() { return gravityMode; }
+    public static int getDebugLogFrequency() { return debugLogFrequency; }
 
     // Setters with validation
     public static boolean setMaxSpeed(double value) {
@@ -122,6 +128,20 @@ public class MinecartConfig {
         return true;
     }
 
+    public static boolean setGravityMode(int value) {
+        if (value < 0 || value > 3) return false;
+        gravityMode = value;
+        save();
+        return true;
+    }
+
+    public static boolean setDebugLogFrequency(int value) {
+        if (value < 0) return false;
+        debugLogFrequency = value;
+        save();
+        return true;
+    }
+
     /**
      * Reset all values to defaults.
      */
@@ -135,8 +155,10 @@ public class MinecartConfig {
         uphillDrag = 0.7;
         initialPush = 0.3;
         rotationSmoothing = 0.15;
-        acceleratorBoost = 1.2;
+        acceleratorBoost = 1.05;
         playerInputStrength = 3.0;
+        gravityMode = 0;
+        debugLogFrequency = 0;
         save();
     }
 
@@ -144,6 +166,13 @@ public class MinecartConfig {
      * Get all current values as a formatted string.
      */
     public static String getStatus() {
+        String modeName = switch (gravityMode) {
+            case 0 -> "ZERO_VEL";
+            case 1 -> "COUNTER";
+            case 2 -> "ZERO_ALL";
+            case 3 -> "AGGRESSIVE";
+            default -> "UNKNOWN";
+        };
         return String.format(
             "Minecart Physics Config:\n" +
             "  maxSpeed: %.2f blocks/s\n" +
@@ -156,9 +185,12 @@ public class MinecartConfig {
             "  initialPush: %.2f\n" +
             "  rotationSmoothing: %.2f\n" +
             "  acceleratorBoost: %.2fx multiplier\n" +
-            "  playerInputStrength: %.2f blocks/s²",
+            "  playerInputStrength: %.2f blocks/s²\n" +
+            "  gravityMode: %d (%s)\n" +
+            "  debugLogFrequency: %d ticks",
             maxSpeed, acceleration, friction, cornerFriction,
-            minSpeed, slopeBoost, uphillDrag, initialPush, rotationSmoothing, acceleratorBoost, playerInputStrength
+            minSpeed, slopeBoost, uphillDrag, initialPush, rotationSmoothing, acceleratorBoost, playerInputStrength,
+            gravityMode, modeName, debugLogFrequency
         );
     }
 
@@ -187,6 +219,8 @@ public class MinecartConfig {
             rotationSmoothing = Double.parseDouble(props.getProperty("rotationSmoothing", "0.15"));
             acceleratorBoost = Double.parseDouble(props.getProperty("acceleratorBoost", "1.2"));
             playerInputStrength = Double.parseDouble(props.getProperty("playerInputStrength", "3.0"));
+            gravityMode = Integer.parseInt(props.getProperty("gravityMode", "0"));
+            debugLogFrequency = Integer.parseInt(props.getProperty("debugLogFrequency", "0"));
 
             LOGGER.atInfo().log("[MinecartConfig] Loaded config from file");
         } catch (Exception e) {
@@ -217,6 +251,8 @@ public class MinecartConfig {
             props.setProperty("rotationSmoothing", String.valueOf(rotationSmoothing));
             props.setProperty("acceleratorBoost", String.valueOf(acceleratorBoost));
             props.setProperty("playerInputStrength", String.valueOf(playerInputStrength));
+            props.setProperty("gravityMode", String.valueOf(gravityMode));
+            props.setProperty("debugLogFrequency", String.valueOf(debugLogFrequency));
 
             try (OutputStream out = Files.newOutputStream(configPath)) {
                 props.store(out, "UsefulMinecarts Physics Configuration");

@@ -203,10 +203,12 @@ public class ChestCartDeathSystem extends DamageEventSystem {
             LOGGER.atInfo().log("[ChestCartDeath] Cart %s is being destroyed! Dropping items...", cartUuid);
 
             // Drop inventory items (for chest carts)
+            // Note: We only drop the INVENTORY contents here. The cart item itself is dropped
+            // by vanilla OnMinecartHit which runs after this system. This prevents duplication.
             dropCartInventory(cartUuid, position, transform.getRotation(), store, commandBuffer);
 
-            // Drop the cart itself as an item
-            dropCartItem(minecart, position, transform.getRotation(), store, commandBuffer);
+            // DO NOT call dropCartItem() here - vanilla OnMinecartHit already handles dropping
+            // the cart item. Calling it here would cause duplication (gives 2+ carts).
         }
     }
 
